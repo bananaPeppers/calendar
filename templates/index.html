@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Flask Frontend — Index</title>
+    <link rel="stylesheet" href="/static/css/style.css" />
+  </head>
+  <body
+    style="
+      margin: 0;
+      padding: 0;
+      background: #f9fafb;
+      font-family:
+        -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;
+    "
+  >
+    <header
+      style="
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: linear-gradient(135deg, #0f1f3d 0%, #1a3a6b 100%);
+        border-radius: 0;
+        padding: 22px 20px 24px;
+        margin: 0;
+        box-shadow: 0 4px 24px rgba(15, 31, 61, 0.18);
+      "
+    >
+      <div style="display: flex; flex-direction: column; gap: 3px">
+        <span
+          style="
+            font-size: 11px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: rgba(255, 255, 255, 0.45);
+          "
+          >Today</span
+        >
+        <span
+          id="dateTab"
+          style="
+            font-size: 18px;
+            font-weight: 600;
+            color: #ffffff;
+            letter-spacing: -0.01em;
+          "
+        ></span>
+      </div>
+
+      <button
+        id="addEventBtn"
+        type="button"
+        style="
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          background: rgba(255, 255, 255, 0.12);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          border-radius: 0;
+          padding: 8px 16px;
+          font-size: 13px;
+          font-weight: 500;
+          color: #ffffff;
+          cursor: pointer;
+          letter-spacing: 0.01em;
+        "
+        onmouseover="this.style.background = 'rgba(255,255,255,0.2)'"
+        onmouseout="this.style.background = 'rgba(255,255,255,0.12)'"
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 16 16"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M8 3v10M3 8h10"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+          />
+        </svg>
+        Add event
+      </button>
+    </header>
+
+    <main style="padding: 24px 16px">
+      <div>
+        <h2
+          style="
+            font-size: 13px;
+            font-weight: 500;
+            color: #9ca3af;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            margin: 0 0 10px;
+          "
+        >
+          Upcoming events
+        </h2>
+
+        <div
+          style="
+            background: #ffffff;
+            border: 0.5px solid rgba(0, 0, 0, 0.08);
+            border-radius: 0;
+            padding: 2rem 1.25rem;
+          "
+        >
+          <ul
+            id="eventsList"
+            aria-live="polite"
+            style="list-style: none; margin: 0; padding: 0"
+          ></ul>
+
+          <div
+            id="emptyState"
+            style="
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              gap: 10px;
+            "
+          >
+            <svg
+              width="36"
+              height="36"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <path
+                d="M3 7a1 1 0 011-1h1V5a3 3 0 013-3h6a3 3 0 013 3v1h1a1 1 0 011 1v11a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"
+                stroke="#9CA3AF"
+                stroke-width="1.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M8 11h8M8 15h5"
+                stroke="#9CA3AF"
+                stroke-width="1.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            <p style="font-size: 14px; color: #9ca3af; margin: 0">
+              No events scheduled.
+            </p>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Fullscreen modal for adding events -->
+    <div id="eventModal" class="modal" aria-hidden="true">
+      <div
+        class="modal-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modalTitle"
+      >
+        <header class="modal-header">
+          <h3 id="modalTitle">Add event</h3>
+          <div style="display: flex; align-items: center; gap: 8px">
+            <button id="saveEventBtn" class="btn primary" type="button">
+              Save
+            </button>
+            <button id="closeModal" class="modal-close" aria-label="Close">
+              ✕
+            </button>
+          </div>
+        </header>
+        <form id="eventForm" class="modal-body">
+          <label class="field">
+            <span class="label">Date</span>
+            <input id="eventDate" type="date" required />
+          </label>
+          <label class="field">
+            <span class="label">Time</span>
+            <input id="eventTime" type="time" required />
+          </label>
+          <label class="field">
+            <span class="label">Description</span>
+            <textarea
+              id="eventDesc"
+              rows="4"
+              placeholder="Brief description"
+              required
+            ></textarea>
+          </label>
+        </form>
+      </div>
+    </div>
+
+    <script src="/static/js/main.js"></script>
+  </body>
+</html>
