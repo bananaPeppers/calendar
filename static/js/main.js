@@ -410,19 +410,13 @@ function insertEventInTimeOrder(groupEventsEl, row, timeString, allDay = false) 
 }
 
 function buildTimeLabel(date, time, endTime, allDay = false) {
-  const dayAnchor = new Date(`${date}T00:00:00`);
-  const dayPrefix = dayAnchor.toLocaleDateString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
-  if (allDay) return `${dayPrefix}, All day`;
+  if (allDay) return "All day";
 
   const startText = formatTimeDisplay(time);
-  if (!endTime) return `${dayPrefix}, ${startText}`;
+  if (!endTime) return startText;
 
   const endText = formatTimeDisplay(endTime);
-  return `${dayPrefix}, ${startText} - ${endText}`;
+  return `${startText} - ${endText}`;
 }
 
 function addEventToList(date, time, title, options = {}) {
