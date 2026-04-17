@@ -25,7 +25,19 @@ const emptyState = document.getElementById("emptyState");
 const appMessage = document.getElementById("appMessage");
 const googleConnectBtn = document.getElementById("googleConnectBtn");
 const googleDisconnectBtn = document.getElementById("googleDisconnectBtn");
-const pickerButtons = document.querySelectorAll(".picker-open-btn");
+const miniCalendar = document.getElementById("miniCalendar");
+const miniCalPrev = document.getElementById("miniCalPrev");
+const miniCalNext = document.getElementById("miniCalNext");
+const miniCalMonthLabel = document.getElementById("miniCalMonthLabel");
+const miniCalGrid = document.getElementById("miniCalGrid");
+const timeDial = document.getElementById("timeDial");
+const timeDialRing = document.getElementById("timeDialRing");
+const timeDialStartHandle = document.getElementById("timeDialStartHandle");
+const timeDialEndHandle = document.getElementById("timeDialEndHandle");
+const timeDialStartText = document.getElementById("timeDialStartText");
+const timeDialEndRow = document.getElementById("timeDialEndRow");
+const timeDialEndText = document.getElementById("timeDialEndText");
+const timeDialDuration = document.getElementById("timeDialDuration");
 
 const wheelPicker = document.getElementById("wheelPicker");
 const wheelBackdrop = document.getElementById("wheelBackdrop");
@@ -37,6 +49,20 @@ const wheelDoneBtn = document.getElementById("wheelDoneBtn");
 let defaultEventCounter = 1;
 let isGoogleConnected = false;
 let wheelState = null;
+let miniCalendarView = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let miniCalendarSelectedIso = "";
+let dialStartMinutes = 0;
+let dialEndMinutes = 60;
+let activeDialHandle = null;
+let isDialEndHandleVisible = false;
+let didMoveStartInCurrentDrag = false;
+let isDialEndTimePlaced = false;
+let wasEndVisibleBeforeStartDrag = false;
+let wasEndPlacedBeforeStartDrag = false;
+const DIAL_TOP_MINUTES = 360; // Top of dial = 6:00 AM
+const DIAL_MINUTE_STEP = 15;
+const DIAL_MAX_MINUTES = 1440 - DIAL_MINUTE_STEP;
+const MINUTES_PER_DAY = 1440;
 
 const WHEEL_ITEM_HEIGHT = 44;
 const softClasses = [
@@ -163,6 +189,37 @@ function partsToTime24(hour12, minute, period) {
 function roundMinuteToStep(minute, step = 5) {
   const val = clamp(Number(minute) || 0, 0, 59);
   return Math.floor(val / step) * step;
+}
+
+function getClockwiseMinutesBetween(startMinutes, endMinutes) {
+  return ((endMinutes - startMinutes) % MINUTES_PER_DAY + MINUTES_PER_DAY) % MINUTES_PER_DAY;
+}
+
+function getCircularMinuteDistance(aMinutes, bMinutes) {
+  const diff = Math.abs(aMinutes - bMinutes);
+  return Math.min(diff, MINUTES_PER_DAY - diff);
+}
+
+function time24ToMinutes(time24) {
+  const normalized = normalizeTimeInput(time24);
+  if (!normalized) return 0;
+  const [hour, minute] = normalized.split(":").map(Number);
+  return hour * 60 + minute;
+}
+
+function minutesToTime24(totalMinutes) {
+  const safe = ((Number(totalMinutes) % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
+  const hour = Math.floor(safe / 60);
+  const minute = safe % 60;
+  return `${pad2(hour)}:${pad2(minute)}`;
+}
+
+function formatDurationLabel(startMinutes, endMinutes) {
+  const clockwise = getClockwiseMinutesBetween(startMinutes, endMinutes);
+  const diff = Math.max(DIAL_MINUTE_STEP, clockwise || DIAL_MINUTE_STEP);
+  const hours = Math.floor(diff / 60);
+  const minutes = diff % 60;
+  return `${hours}:${pad2(minutes)}`;
 }
 
 function showAppMessage(text, type = "info") {
@@ -368,6 +425,232 @@ function getInputForPickerKind(kind) {
 
 function getDaysInMonth(year, month) {
   return new Date(year, month, 0).getDate();
+}
+
+function getTodayIsoDate() {
+  const now = new Date();
+  return toIsoDate(now.getFullYear(), now.getMonth() + 1, now.getDate());
+}
+
+function renderMiniCalendar() {
+  if (!miniCalendar || !miniCalMonthLabel || !miniCalGrid) return;
+
+  const year = miniCalendarView.getFullYear();
+  const monthIndex = miniCalendarView.getMonth();
+  const firstDay = new Date(year, monthIndex, 1).getDay();
+  const daysInMonth = getDaysInMonth(year, monthIndex + 1);
+  const todayIso = getTodayIsoDate();
+
+  miniCalMonthLabel.textContent = new Date(year, monthIndex, 1).toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
+
+  miniCalGrid.innerHTML = "";
+
+  for (let i = 0; i < firstDay; i += 1) {
+    const empty = document.createElement("span");
+    empty.className = "mini-cal-empty";
+    empty.setAttribute("aria-hidden", "true");
+    miniCalGrid.appendChild(empty);
+  }
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const isoDate = toIsoDate(year, monthIndex + 1, day);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "mini-cal-day";
+    btn.textContent = String(day);
+    btn.setAttribute("role", "gridcell");
+    btn.setAttribute("aria-label", new Date(year, monthIndex, day).toDateString());
+    if (isoDate === miniCalendarSelectedIso) btn.classList.add("is-selected");
+    if (isoDate === todayIso) btn.classList.add("is-today");
+
+    btn.addEventListener("click", () => {
+      miniCalendarSelectedIso = isoDate;
+      if (eventDate) eventDate.value = formatDateDisplayFromIso(isoDate);
+      renderMiniCalendar();
+    });
+
+    miniCalGrid.appendChild(btn);
+  }
+
+  const totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7;
+  const tail = totalCells - (firstDay + daysInMonth);
+  for (let i = 0; i < tail; i += 1) {
+    const empty = document.createElement("span");
+    empty.className = "mini-cal-empty";
+    empty.setAttribute("aria-hidden", "true");
+    miniCalGrid.appendChild(empty);
+  }
+}
+
+function syncMiniCalendarFromInput() {
+  const normalized = normalizeDateInput(eventDate?.value || "");
+  if (!normalized) {
+    miniCalendarSelectedIso = "";
+    renderMiniCalendar();
+    return;
+  }
+
+  miniCalendarSelectedIso = normalized;
+  if (eventDate) eventDate.value = formatDateDisplayFromIso(normalized);
+
+  const [year, month] = normalized.split("-").map(Number);
+  miniCalendarView = new Date(year, month - 1, 1);
+  renderMiniCalendar();
+}
+
+function minutesToDialAngle(minutes) {
+  const normalized = ((minutes - DIAL_TOP_MINUTES) % MINUTES_PER_DAY + MINUTES_PER_DAY) % MINUTES_PER_DAY;
+  return (normalized / MINUTES_PER_DAY) * 360;
+}
+
+function getDialMinutesFromPoint(clientX, clientY) {
+  if (!timeDialRing) return 0;
+  const rect = timeDialRing.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  let angle = (Math.atan2(clientY - cy, clientX - cx) * 180) / Math.PI + 90;
+  if (angle < 0) angle += 360;
+  const raw = ((angle / 360) * MINUTES_PER_DAY + DIAL_TOP_MINUTES) % MINUTES_PER_DAY;
+  const snapped = Math.round(raw / DIAL_MINUTE_STEP) * DIAL_MINUTE_STEP;
+  return clamp(snapped, 0, DIAL_MAX_MINUTES);
+}
+
+function setDialEndHandleVisible(visible) {
+  isDialEndHandleVisible = Boolean(visible);
+  if (timeDial) {
+    timeDial.classList.toggle("is-end-handle-visible", isDialEndHandleVisible);
+  }
+}
+
+function beginStartHandlePlacementCycle() {
+  wasEndVisibleBeforeStartDrag = isDialEndHandleVisible;
+  wasEndPlacedBeforeStartDrag = isDialEndTimePlaced;
+  setDialEndHandleVisible(false);
+  isDialEndTimePlaced = false;
+  didMoveStartInCurrentDrag = false;
+}
+
+function placeDialHandle(handle, minutes) {
+  if (!timeDialRing || !handle) return;
+  const rect = timeDialRing.getBoundingClientRect();
+  const radius = rect.width / 2 - rect.width * 0.038;
+  const normalized = ((minutes - DIAL_TOP_MINUTES) % MINUTES_PER_DAY + MINUTES_PER_DAY) % MINUTES_PER_DAY;
+  const angle = (normalized / MINUTES_PER_DAY) * Math.PI * 2 - Math.PI / 2;
+  const x = rect.width / 2 + Math.cos(angle) * radius;
+  const y = rect.height / 2 + Math.sin(angle) * radius;
+  handle.style.left = `${x}px`;
+  handle.style.top = `${y}px`;
+}
+
+function renderTimeDial() {
+  if (!timeDialRing) return;
+
+  const startAngle = minutesToDialAngle(dialStartMinutes);
+  const endAngle = minutesToDialAngle(dialEndMinutes);
+  timeDialRing.style.setProperty("--dial-start-angle", `${startAngle}deg`);
+  timeDialRing.style.setProperty("--dial-end-angle", `${endAngle}deg`);
+
+  placeDialHandle(timeDialStartHandle, dialStartMinutes);
+  placeDialHandle(timeDialEndHandle, dialEndMinutes);
+
+  const startText = formatTimeDisplay(minutesToTime24(dialStartMinutes));
+  const endText = formatTimeDisplay(minutesToTime24(dialEndMinutes));
+  if (eventTime) eventTime.value = startText;
+  if (eventEndTime) eventEndTime.value = endText;
+  if (timeDialStartText) timeDialStartText.textContent = startText;
+  if (timeDialEndRow) timeDialEndRow.hidden = !isDialEndTimePlaced;
+  if (timeDialEndText) timeDialEndText.textContent = endText;
+  if (timeDialDuration) timeDialDuration.textContent = `Duration ${formatDurationLabel(dialStartMinutes, dialEndMinutes)}`;
+}
+
+function setDialFromInputValues() {
+  const now = new Date();
+  const defaultStart = `${pad2(now.getHours())}:${pad2(roundMinuteToStep(now.getMinutes(), DIAL_MINUTE_STEP))}`;
+  const startNormalized = normalizeTimeInput(eventTime?.value || "") || defaultStart;
+  const fallbackEnd = (() => {
+    const startMin = clamp(
+      Math.round(time24ToMinutes(startNormalized) / DIAL_MINUTE_STEP) * DIAL_MINUTE_STEP,
+      0,
+      DIAL_MAX_MINUTES,
+    );
+    return minutesToTime24((startMin + 60) % MINUTES_PER_DAY);
+  })();
+  const endNormalized = normalizeTimeInput(eventEndTime?.value || "") || fallbackEnd;
+
+  dialStartMinutes = clamp(
+    Math.round(time24ToMinutes(startNormalized) / DIAL_MINUTE_STEP) * DIAL_MINUTE_STEP,
+    0,
+    DIAL_MAX_MINUTES,
+  );
+  dialEndMinutes = clamp(
+    Math.round(time24ToMinutes(endNormalized) / DIAL_MINUTE_STEP) * DIAL_MINUTE_STEP,
+    0,
+    DIAL_MAX_MINUTES,
+  );
+  if (getClockwiseMinutesBetween(dialStartMinutes, dialEndMinutes) < DIAL_MINUTE_STEP) {
+    dialEndMinutes = (dialStartMinutes + 60) % MINUTES_PER_DAY;
+  }
+  setDialEndHandleVisible(false);
+  isDialEndTimePlaced = false;
+  didMoveStartInCurrentDrag = false;
+  renderTimeDial();
+}
+
+function chooseClosestDialHandle(targetMinutes) {
+  if (!isDialEndHandleVisible) return "start";
+  const startDist = getCircularMinuteDistance(targetMinutes, dialStartMinutes);
+  const endDist = getCircularMinuteDistance(targetMinutes, dialEndMinutes);
+  return startDist <= endDist ? "start" : "end";
+}
+
+function updateActiveDialHandle(clientX, clientY) {
+  const nextMinutes = getDialMinutesFromPoint(clientX, clientY);
+  if (activeDialHandle === "start") {
+    if (!isDialEndHandleVisible) {
+      const previousStart = dialStartMinutes;
+      dialStartMinutes = clamp(nextMinutes, 0, DIAL_MAX_MINUTES);
+      if (dialStartMinutes !== previousStart) {
+        didMoveStartInCurrentDrag = true;
+      }
+      dialEndMinutes = (dialStartMinutes + 60) % MINUTES_PER_DAY;
+    } else {
+      dialStartMinutes = clamp(nextMinutes, 0, DIAL_MAX_MINUTES);
+      if (getClockwiseMinutesBetween(dialStartMinutes, dialEndMinutes) < DIAL_MINUTE_STEP) {
+        dialStartMinutes = (dialEndMinutes - DIAL_MINUTE_STEP + MINUTES_PER_DAY) % MINUTES_PER_DAY;
+      }
+    }
+  } else if (activeDialHandle === "end") {
+    dialEndMinutes = clamp(nextMinutes, 0, DIAL_MAX_MINUTES);
+    if (getClockwiseMinutesBetween(dialStartMinutes, dialEndMinutes) < DIAL_MINUTE_STEP) {
+      dialEndMinutes = (dialStartMinutes + DIAL_MINUTE_STEP) % MINUTES_PER_DAY;
+    }
+    isDialEndTimePlaced = true;
+  }
+  renderTimeDial();
+}
+
+function onDialPointerMove(event) {
+  if (!activeDialHandle) return;
+  updateActiveDialHandle(event.clientX, event.clientY);
+}
+
+function stopDialDrag() {
+  if (activeDialHandle === "start") {
+    if (!isDialEndHandleVisible && didMoveStartInCurrentDrag) {
+      setDialEndHandleVisible(true);
+    } else if (!didMoveStartInCurrentDrag && wasEndVisibleBeforeStartDrag) {
+      setDialEndHandleVisible(true);
+      isDialEndTimePlaced = wasEndPlacedBeforeStartDrag;
+      renderTimeDial();
+    }
+  }
+  activeDialHandle = null;
+  didMoveStartInCurrentDrag = false;
+  wasEndVisibleBeforeStartDrag = false;
+  wasEndPlacedBeforeStartDrag = false;
 }
 
 function buildWheelColumn(key, options, selectedValue) {
@@ -647,6 +930,7 @@ function openModal() {
   const mm = pad2(now.getMonth() + 1);
   const dd = pad2(now.getDate());
   if (eventDate) eventDate.value = formatDateDisplayFromIso(`${yyyy}-${mm}-${dd}`);
+  syncMiniCalendarFromInput();
 
   const hh = pad2(now.getHours());
   const mins = pad2(now.getMinutes());
@@ -656,6 +940,7 @@ function openModal() {
   const endHH = pad2(end.getHours());
   const endMM = pad2(end.getMinutes());
   if (eventEndTime) eventEndTime.value = formatTimeDisplay(`${endHH}:${endMM}`);
+  setDialFromInputValues();
 
   if (eventTitle) {
     eventTitle.value = `Event ${defaultEventCounter}`;
@@ -664,7 +949,10 @@ function openModal() {
 
   modal.setAttribute("aria-hidden", "false");
   modal.classList.add("show");
-  setTimeout(() => eventTitle?.focus(), 100);
+  setTimeout(() => {
+    renderTimeDial();
+    eventTitle?.focus();
+  }, 100);
 }
 
 function closeModal() {
@@ -698,27 +986,48 @@ eventTitle?.addEventListener("input", (e) => {
 });
 
 eventDate?.addEventListener("blur", () => {
-  const normalized = normalizeDateInput(eventDate.value);
-  if (normalized) eventDate.value = formatDateDisplayFromIso(normalized);
+  syncMiniCalendarFromInput();
 });
 
-eventTime?.addEventListener("blur", () => {
-  const normalized = normalizeTimeInput(eventTime.value);
-  if (normalized) eventTime.value = formatTimeDisplay(normalized);
+miniCalPrev?.addEventListener("click", () => {
+  miniCalendarView = new Date(miniCalendarView.getFullYear(), miniCalendarView.getMonth() - 1, 1);
+  renderMiniCalendar();
 });
 
-eventEndTime?.addEventListener("blur", () => {
-  const normalized = normalizeTimeInput(eventEndTime.value);
-  if (normalized) eventEndTime.value = formatTimeDisplay(normalized);
+miniCalNext?.addEventListener("click", () => {
+  miniCalendarView = new Date(miniCalendarView.getFullYear(), miniCalendarView.getMonth() + 1, 1);
+  renderMiniCalendar();
 });
 
-pickerButtons.forEach((btn) => {
-  btn.addEventListener("click", () => {
-    const target = btn.dataset.pickerTarget;
-    if (!target) return;
-    openWheelPicker(target);
-  });
+timeDialStartHandle?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  activeDialHandle = "start";
+  beginStartHandlePlacementCycle();
+  updateActiveDialHandle(event.clientX, event.clientY);
 });
+
+timeDialEndHandle?.addEventListener("pointerdown", (event) => {
+  if (!isDialEndHandleVisible) return;
+  event.preventDefault();
+  activeDialHandle = "end";
+  updateActiveDialHandle(event.clientX, event.clientY);
+});
+
+timeDialRing?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  if (event.target === timeDialStartHandle || event.target === timeDialEndHandle) return;
+  const minutes = getDialMinutesFromPoint(event.clientX, event.clientY);
+  activeDialHandle = chooseClosestDialHandle(minutes);
+  if (activeDialHandle === "start") {
+    beginStartHandlePlacementCycle();
+  }
+  updateActiveDialHandle(event.clientX, event.clientY);
+});
+
+window.addEventListener("pointermove", onDialPointerMove);
+window.addEventListener("pointerup", stopDialDrag);
+window.addEventListener("pointercancel", stopDialDrag);
+window.addEventListener("resize", renderTimeDial);
 
 wheelBackdrop?.addEventListener("click", closeWheelPicker);
 wheelCancelBtn?.addEventListener("click", closeWheelPicker);
@@ -756,8 +1065,10 @@ eventForm?.addEventListener("submit", async (e) => {
     return;
   }
 
-  if (getTimeSortValue(normalizedEnd) <= getTimeSortValue(normalizedStart)) {
-    showAppMessage("End time must be later than start time.", "error");
+  const startMinutes = time24ToMinutes(normalizedStart);
+  const endMinutes = time24ToMinutes(normalizedEnd);
+  if (getClockwiseMinutesBetween(startMinutes, endMinutes) < DIAL_MINUTE_STEP) {
+    showAppMessage("End time must be at least 15 minutes after start time.", "error");
     return;
   }
 
@@ -786,6 +1097,8 @@ eventForm?.addEventListener("submit", async (e) => {
 
 window.addEventListener("DOMContentLoaded", async () => {
   consumeQueryMessages();
+  renderMiniCalendar();
+  setDialFromInputValues();
 
   if (googleConnectBtn) {
     googleConnectBtn.addEventListener("click", (e) => {

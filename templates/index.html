@@ -92,10 +92,16 @@
         class="modal-panel"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="modalTitle"
+        aria-label="Add event"
       >
         <header class="modal-header">
-          <h3 id="modalTitle">Add event</h3>
+          <input
+            id="eventTitle"
+            class="modal-title-input"
+            type="text"
+            maxlength="140"
+            placeholder="Event title"
+          />
           <div class="modal-header-actions">
             <button id="saveEventBtn" class="btn primary" type="button">
               Save
@@ -107,76 +113,54 @@
         </header>
 
         <form id="eventForm" class="modal-body">
-          <label class="field">
-            <span class="label">Title</span>
-            <input id="eventTitle" type="text" maxlength="140" required />
-          </label>
-
-          <label class="field">
+          <div class="field">
             <span class="label">Date</span>
-            <div class="picker-input-wrap">
-              <input
-                id="eventDate"
-                type="text"
-                inputmode="numeric"
-                autocomplete="off"
-                placeholder="MM/DD/YYYY"
-                required
-              />
-              <button
-                type="button"
-                class="picker-open-btn"
-                data-picker-target="date"
-                aria-label="Open date selector"
-              >
-                Select
-              </button>
+            <input
+              id="eventDate"
+              type="text"
+              inputmode="numeric"
+              autocomplete="off"
+              placeholder="MM/DD/YYYY"
+              required
+            />
+            <div id="miniCalendar" class="mini-calendar" aria-label="Mini calendar">
+              <div class="mini-cal-header">
+                <button id="miniCalPrev" type="button" class="mini-cal-nav" aria-label="Previous month">
+                  &#8249;
+                </button>
+                <span id="miniCalMonthLabel" class="mini-cal-month">Month Year</span>
+                <button id="miniCalNext" type="button" class="mini-cal-nav" aria-label="Next month">
+                  &#8250;
+                </button>
+              </div>
+              <div class="mini-cal-weekdays" aria-hidden="true">
+                <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+              </div>
+              <div id="miniCalGrid" class="mini-cal-grid" role="grid" aria-label="Select date"></div>
             </div>
-          </label>
+          </div>
 
-          <label class="field">
-            <span class="label">Start time</span>
-            <div class="picker-input-wrap">
-              <input
-                id="eventTime"
-                type="text"
-                inputmode="numeric"
-                autocomplete="off"
-                placeholder="h:mm AM/PM"
-                required
-              />
-              <button
-                type="button"
-                class="picker-open-btn"
-                data-picker-target="start-time"
-                aria-label="Open start time selector"
-              >
-                Select
-              </button>
-            </div>
-          </label>
+          <input id="eventTime" type="hidden" />
+          <input id="eventEndTime" type="hidden" />
 
-          <label class="field">
-            <span class="label">End time</span>
-            <div class="picker-input-wrap">
-              <input
-                id="eventEndTime"
-                type="text"
-                inputmode="numeric"
-                autocomplete="off"
-                placeholder="h:mm AM/PM"
-                required
-              />
-              <button
-                type="button"
-                class="picker-open-btn"
-                data-picker-target="end-time"
-                aria-label="Open end time selector"
-              >
-                Select
-              </button>
+          <div id="timeDial" class="time-dial" aria-label="Time dial">
+            <div id="timeDialRing" class="time-dial-ring">
+              <button id="timeDialStartHandle" type="button" class="time-dial-handle is-start" aria-label="Adjust start time"></button>
+              <button id="timeDialEndHandle" type="button" class="time-dial-handle is-end" aria-label="Adjust end time"></button>
+
+              <div class="time-dial-center">
+                <div class="time-dial-center-row">
+                  <span class="time-dial-center-label is-start">Start</span>
+                  <span id="timeDialStartText" class="time-dial-center-time">--</span>
+                </div>
+                <div id="timeDialEndRow" class="time-dial-center-row">
+                  <span class="time-dial-center-label is-end">End</span>
+                  <span id="timeDialEndText" class="time-dial-center-time">--</span>
+                </div>
+              </div>
             </div>
-          </label>
+            <p id="timeDialDuration" class="time-dial-duration"></p>
+          </div>
 
         </form>
       </div>
