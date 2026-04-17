@@ -179,6 +179,7 @@ def google_events():
     state = get_user_google_state()
     if not state.get("connected") or not state.get("credentials"):
         return jsonify({"ok": False, "connected": False, "error": "Google Calendar is not connected."}), 401
+    display_time_zone = (request.args.get("time_zone") or "").strip() or None
 
     try:
         credentials = dict_to_credentials(state.get("credentials"))
@@ -188,8 +189,10 @@ def google_events():
             connected=True,
             credentials=credentials_to_dict(credentials),
         )
-        events = list_upcoming_events(credentials)
+        events = list_upcoming_events(credentials, display_time_zone=display_time_zone)
         return jsonify({"ok": True, "connected": True, "events": events})
+    except GoogleIntegrationError as exc:
+        return jsonify({"ok": False, "connected": True, "error": str(exc)}), 400
     except Exception as exc:
         return jsonify({"ok": False, "connected": True, "error": f"Failed to fetch events: {exc}"}), 502
 
@@ -201,6 +204,13 @@ def google_create_event():
         return jsonify({"ok": False, "error": "Google Calendar is not connected."}), 401
 
     payload = request.get_json(silent=True) or {}
+    payload_time_zone = (
+        payload.get("time_zone")
+        or request.headers.get("X-Time-Zone")
+        or request.args.get("time_zone")
+        or ""
+    )
+    payload["time_zone"] = payload_time_zone.strip()
     try:
         credentials = dict_to_credentials(state.get("credentials"))
         credentials = ensure_valid_credentials(credentials)

@@ -1,6 +1,7 @@
 import os
 from datetime import datetime, time, timedelta, timezone
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -52,11 +53,13 @@ def _parse_google_datetime(value: str) -> datetime:
     return dt
 
 
-def _to_local(dt: datetime) -> datetime:
-    local_tz = datetime.now().astimezone().tzinfo
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=local_tz)
-    return dt.astimezone(local_tz)
+def _resolve_time_zone(time_zone_name: str | None):
+    if not time_zone_name:
+        return None
+    try:
+        return ZoneInfo(time_zone_name)
+    except ZoneInfoNotFoundError as exc:
+        raise GoogleIntegrationError(f"Unsupported time zone: {time_zone_name}") from exc
 
 
 def build_oauth_flow(state: str | None = None) -> Flow:
@@ -100,10 +103,13 @@ def ensure_valid_credentials(credentials: Credentials) -> Credentials:
     return credentials
 
 
-def normalize_google_event(raw_event: dict[str, Any]) -> dict[str, Any]:
+def normalize_google_event(
+    raw_event: dict[str, Any], *, display_time_zone: str | None = None
+) -> dict[str, Any]:
     start = raw_event.get("start", {})
     end = raw_event.get("end", {})
     all_day = "date" in start
+    target_zone = _resolve_time_zone(display_time_zone)
 
     if all_day:
         date_value = start.get("date")
@@ -111,8 +117,14 @@ def normalize_google_event(raw_event: dict[str, Any]) -> dict[str, Any]:
         time_value = "00:00"
         end_time = ""
     else:
-        start_dt = _to_local(_parse_google_datetime(start.get("dateTime")))
-        end_dt = _to_local(_parse_google_datetime(end.get("dateTime"))) if end.get("dateTime") else None
+        start_dt = _parse_google_datetime(start.get("dateTime"))
+        if target_zone:
+            start_dt = start_dt.astimezone(target_zone)
+
+        end_dt = _parse_google_datetime(end.get("dateTime")) if end.get("dateTime") else None
+        if end_dt and target_zone:
+            end_dt = end_dt.astimezone(target_zone)
+
         date_value = start_dt.strftime("%Y-%m-%d")
         time_value = start_dt.strftime("%H:%M")
         end_date = end_dt.strftime("%Y-%m-%d") if end_dt else date_value
@@ -130,9 +142,16 @@ def normalize_google_event(raw_event: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def list_upcoming_events(credentials: Credentials, *, max_results: int = 250) -> list[dict[str, Any]]:
+def list_upcoming_events(
+    credentials: Credentials,
+    *,
+    max_results: int = 250,
+    display_time_zone: str | None = None,
+    lookback_minutes: int = 5,
+) -> list[dict[str, Any]]:
     service = build("calendar", "v3", credentials=credentials, cache_discovery=False)
-    now = datetime.now(timezone.utc).isoformat()
+    safe_lookback = max(0, lookback_minutes)
+    now = (datetime.now(timezone.utc) - timedelta(minutes=safe_lookback)).isoformat()
     response = (
         service.events()
         .list(
@@ -145,7 +164,7 @@ def list_upcoming_events(credentials: Credentials, *, max_results: int = 250) ->
         .execute()
     )
     items = response.get("items", [])
-    return [normalize_google_event(item) for item in items]
+    return [normalize_google_event(item, display_time_zone=display_time_zone) for item in items]
 
 
 def create_google_event(credentials: Credentials, payload: dict[str, Any]) -> dict[str, Any]:
@@ -154,6 +173,7 @@ def create_google_event(credentials: Credentials, payload: dict[str, Any]) -> di
     date_value = (payload.get("date") or "").strip()
     start_time = (payload.get("start_time") or "").strip()
     end_time = (payload.get("end_time") or "").strip()
+    time_zone_name = (payload.get("time_zone") or "").strip()
 
     if not summary:
         raise GoogleIntegrationError("Event title is required.")
@@ -162,14 +182,17 @@ def create_google_event(credentials: Credentials, payload: dict[str, Any]) -> di
     if not start_time or not end_time:
         raise GoogleIntegrationError("Start and end time are required.")
 
+    event_tz = _resolve_time_zone(time_zone_name)
+    if event_tz is None:
+        event_tz = datetime.now().astimezone().tzinfo or timezone.utc
+
     start_dt = datetime.combine(datetime.fromisoformat(date_value).date(), time.fromisoformat(start_time))
     end_dt = datetime.combine(datetime.fromisoformat(date_value).date(), time.fromisoformat(end_time))
     if end_dt <= start_dt:
         end_dt = end_dt + timedelta(days=1)
 
-    local_tz = datetime.now().astimezone().tzinfo
-    start_dt = start_dt.replace(tzinfo=local_tz)
-    end_dt = end_dt.replace(tzinfo=local_tz)
+    start_dt = start_dt.replace(tzinfo=event_tz)
+    end_dt = end_dt.replace(tzinfo=event_tz)
 
     event_body = {
         "summary": summary,
@@ -177,7 +200,10 @@ def create_google_event(credentials: Credentials, payload: dict[str, Any]) -> di
         "start": {"dateTime": start_dt.isoformat()},
         "end": {"dateTime": end_dt.isoformat()},
     }
+    if time_zone_name:
+        event_body["start"]["timeZone"] = time_zone_name
+        event_body["end"]["timeZone"] = time_zone_name
 
     service = build("calendar", "v3", credentials=credentials, cache_discovery=False)
     created = service.events().insert(calendarId="primary", body=event_body).execute()
-    return normalize_google_event(created)
+    return normalize_google_event(created, display_time_zone=time_zone_name or None)

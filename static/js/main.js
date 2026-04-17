@@ -79,6 +79,14 @@ function pad2(num) {
   return String(num).padStart(2, "0");
 }
 
+function getBrowserTimeZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -877,7 +885,8 @@ async function fetchGoogleStatus() {
 async function loadGoogleEvents() {
   clearRenderedEvents();
   try {
-    const response = await fetch("/api/google/events");
+    const params = new URLSearchParams({ time_zone: getBrowserTimeZone() });
+    const response = await fetch(`/api/google/events?${params.toString()}`);
     const data = await response.json();
     if (!response.ok) {
       throw new Error(data.error || "Unable to fetch Google Calendar events.");
@@ -1074,13 +1083,19 @@ eventForm?.addEventListener("submit", async (e) => {
 
   try {
     if (isGoogleConnected) {
-      await createGoogleCalendarEvent({
+      const createdEvent = await createGoogleCalendarEvent({
         summary: title,
         date: normalizedDate,
         start_time: normalizedStart,
         end_time: normalizedEnd,
+        time_zone: getBrowserTimeZone(),
       });
-      await loadGoogleEvents();
+      if (createdEvent) {
+        addEventToList(createdEvent.date, createdEvent.time, createdEvent.title, {
+          endTime: createdEvent.end_time,
+          allDay: createdEvent.all_day,
+        });
+      }
     } else {
       addEventToList(normalizedDate, normalizedStart, title, {
         endTime: normalizedEnd,
