@@ -131,6 +131,29 @@ body.wheel-open {
   background: #e8f1ff;
 }
 
+.google-disconnect-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.google-disconnect-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.google-disconnect-btn img {
+  width: 17px;
+  height: 17px;
+  object-fit: contain;
+}
+
 /* Main */
 .main-content {
   padding: 24px 0 40px;
@@ -610,6 +633,16 @@ textarea:focus {
   .google-connect-btn {
     padding: 8px 11px;
     font-size: 12px;
+  }
+
+  .google-disconnect-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .google-disconnect-btn img {
+    width: 15px;
+    height: 15px;
   }
 
   .picker-open-btn {

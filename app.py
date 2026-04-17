@@ -1,5 +1,7 @@
 import os
 import tempfile
+import urllib.parse
+import urllib.request
 from datetime import timedelta
 from uuid import uuid4
 
@@ -54,6 +56,23 @@ def get_user_key() -> str:
 
 def get_user_google_state() -> dict:
     return store.get_connection_state(get_user_key())
+
+
+def revoke_google_token(token: str) -> None:
+    if not token:
+        return
+    payload = urllib.parse.urlencode({"token": token}).encode("utf-8")
+    req = urllib.request.Request(
+        "https://oauth2.googleapis.com/revoke",
+        data=payload,
+        method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10):
+            pass
+    except Exception:
+        app.logger.warning("Failed to revoke Google token during disconnect.")
 
 
 @app.get("/")
@@ -139,6 +158,20 @@ def google_status():
             "configured": is_google_configured(),
         }
     )
+
+
+@app.post("/api/google/disconnect")
+def google_disconnect():
+    user_key = get_user_key()
+    state = store.get_connection_state(user_key)
+    credentials = state.get("credentials") or {}
+    token = credentials.get("refresh_token") or credentials.get("token")
+    revoke_google_token(token or "")
+
+    store.save_connection_state(user_key, connected=False, credentials={})
+    session.pop("google_oauth_state", None)
+    session.pop("google_oauth_code_verifier", None)
+    return jsonify({"ok": True, "connected": False})
 
 
 @app.get("/api/google/events")

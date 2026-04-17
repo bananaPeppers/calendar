@@ -24,6 +24,7 @@ const eventsList = document.getElementById("eventsList");
 const emptyState = document.getElementById("emptyState");
 const appMessage = document.getElementById("appMessage");
 const googleConnectBtn = document.getElementById("googleConnectBtn");
+const googleDisconnectBtn = document.getElementById("googleDisconnectBtn");
 const pickerButtons = document.querySelectorAll(".picker-open-btn");
 
 const wheelPicker = document.getElementById("wheelPicker");
@@ -194,6 +195,7 @@ function clearRenderedEvents() {
 
 function updateGoogleUi(connected) {
   if (googleConnectBtn) googleConnectBtn.hidden = connected;
+  if (googleDisconnectBtn) googleDisconnectBtn.hidden = !connected;
 }
 
 function consumeQueryMessages() {
@@ -625,6 +627,17 @@ async function createGoogleCalendarEvent(payload) {
   return data.event;
 }
 
+async function disconnectGoogleCalendar() {
+  const response = await fetch("/api/google/disconnect", {
+    method: "POST",
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || "Unable to disconnect Google Calendar.");
+  }
+  return data;
+}
+
 function openModal() {
   if (!modal) return;
   clearAppMessage();
@@ -710,6 +723,18 @@ pickerButtons.forEach((btn) => {
 wheelBackdrop?.addEventListener("click", closeWheelPicker);
 wheelCancelBtn?.addEventListener("click", closeWheelPicker);
 wheelDoneBtn?.addEventListener("click", applyWheelPickerValue);
+googleDisconnectBtn?.addEventListener("click", async () => {
+  clearAppMessage();
+  try {
+    await disconnectGoogleCalendar();
+    isGoogleConnected = false;
+    updateGoogleUi(false);
+    clearRenderedEvents();
+    showAppMessage("Google Calendar disconnected.", "success");
+  } catch (err) {
+    showAppMessage(err.message, "error");
+  }
+});
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && wheelState) {
