@@ -1,51 +1,50 @@
-# Flask Frontend Starter
+# Flask Calendar App (Google Calendar Integration)
 
-This is a minimal Flask project that serves a front-end HTML page. Use it as a starting point for building your UI.
+This project is a Flask + vanilla JS calendar UI with Google Calendar OAuth integration.
 
-Quick start (Windows PowerShell):
+## Quick start (Windows PowerShell)
 
 ```powershell
 python -m venv venv
 venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+copy .env.example .env
+```
+
+Set environment variables from `.env.example`, then run:
+
+```powershell
 python app.py
 ```
 
-Then open http://127.0.0.1:5000/ in your browser.
+Open http://127.0.0.1:5000/ in your browser.
 
-## Deploy on Railway
+## Required environment variables
 
-This project is ready for Railway with:
+- `FLASK_SECRET_KEY`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_REDIRECT_URI` (example: `http://127.0.0.1:5000/google/callback`)
+- Optional: `APP_STATE_DB` (default: `data/app_state.db`)
 
-- `Procfile` containing `web: gunicorn app:app`
-- `gunicorn` added to `requirements.txt`
-- Flask app binding to `0.0.0.0` and using Railway's `PORT`
+## Google Cloud setup
 
-### Option 1: Deploy from GitHub (recommended)
+1. Create or select a Google Cloud project.
+2. Enable the Google Calendar API.
+3. Create OAuth client credentials (Web application).
+4. Add an authorized redirect URI that matches `GOOGLE_REDIRECT_URI`.
+5. Put the client ID/secret in your environment variables.
 
-1. Push this project to a GitHub repository.
-2. Go to Railway and create a new project.
-3. Choose **Deploy from GitHub repo** and select your repo.
-4. Railway will detect Python and install dependencies from `requirements.txt`.
-5. Railway will run the web process from `Procfile`.
-6. Open the generated Railway domain to access the app.
+## Persistent connect-button behavior
 
-### Option 2: Deploy with Railway CLI
+After successful OAuth, the backend stores:
+- `connected = true`
+- OAuth credentials
 
-```powershell
-npm i -g @railway/cli
-railway login
-railway init
-railway up
-```
+in SQLite (`data/app_state.db`) keyed by a long-lived Flask session user key.
 
-Then run:
+On page load, frontend calls `GET /api/google/status`:
+- if connected: connect button stays hidden and events are loaded from Google
+- if not connected: connect button is shown
 
-```powershell
-railway open
-```
-
-### Notes
-
-- You do not need to set `PORT` manually on Railway.
-- If you later add secrets (API keys, DB URLs), set them in Railway Variables.
+This persisted server-side state survives normal server restarts.
