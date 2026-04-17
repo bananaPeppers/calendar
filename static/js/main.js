@@ -24,7 +24,6 @@ const eventsList = document.getElementById("eventsList");
 const emptyState = document.getElementById("emptyState");
 const appMessage = document.getElementById("appMessage");
 const googleConnectBtn = document.getElementById("googleConnectBtn");
-const googleConnectedBadge = document.getElementById("googleConnectedBadge");
 const pickerButtons = document.querySelectorAll(".picker-open-btn");
 
 const wheelPicker = document.getElementById("wheelPicker");
@@ -195,7 +194,6 @@ function clearRenderedEvents() {
 
 function updateGoogleUi(connected) {
   if (googleConnectBtn) googleConnectBtn.hidden = connected;
-  if (googleConnectedBadge) googleConnectedBadge.hidden = !connected;
 }
 
 function consumeQueryMessages() {

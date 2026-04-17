@@ -131,19 +131,6 @@ body.wheel-open {
   background: #e8f1ff;
 }
 
-.google-connected-badge {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  padding: 8px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: #e5efff;
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  background: rgba(255, 255, 255, 0.1);
-}
-
 /* Main */
 .main-content {
   padding: 24px 0 40px;
@@ -623,11 +610,6 @@ textarea:focus {
   .google-connect-btn {
     padding: 8px 11px;
     font-size: 12px;
-  }
-
-  .google-connected-badge {
-    padding: 7px 10px;
-    font-size: 11px;
   }
 
   .picker-open-btn {
