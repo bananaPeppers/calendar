@@ -79,6 +79,9 @@ def google_connect():
         prompt="consent",
     )
     session["google_oauth_state"] = state
+    code_verifier = getattr(flow, "code_verifier", None)
+    if code_verifier:
+        session["google_oauth_code_verifier"] = code_verifier
     return redirect(auth_url)
 
 
@@ -88,14 +91,21 @@ def google_callback():
     oauth_error_description = request.args.get("error_description")
     if oauth_error:
         message = oauth_error_description or oauth_error
+        session.pop("google_oauth_state", None)
+        session.pop("google_oauth_code_verifier", None)
         return redirect(url_for("index", google_error=message))
 
     state = session.get("google_oauth_state")
     if not state:
+        session.pop("google_oauth_code_verifier", None)
         return redirect(url_for("index", google_error="Missing OAuth state"))
 
     try:
         flow = build_oauth_flow(state=state)
+        code_verifier = session.get("google_oauth_code_verifier")
+        if code_verifier:
+            flow.code_verifier = code_verifier
+
         authorization_response = request.url
         forwarded_proto = request.headers.get("X-Forwarded-Proto", "").split(",")[0].strip().lower()
         if forwarded_proto == "https" and authorization_response.startswith("http://"):
@@ -105,6 +115,8 @@ def google_callback():
         creds_dict = credentials_to_dict(flow.credentials)
     except Exception as exc:
         app.logger.exception("Failed to authorize Google Calendar callback")
+        session.pop("google_oauth_state", None)
+        session.pop("google_oauth_code_verifier", None)
         return redirect(url_for("index", google_error=f"Failed to authorize Google Calendar: {exc}"))
 
     user_key = get_user_key()
@@ -114,6 +126,7 @@ def google_callback():
 
     store.save_connection_state(user_key, connected=True, credentials=creds_dict)
     session.pop("google_oauth_state", None)
+    session.pop("google_oauth_code_verifier", None)
     return redirect(url_for("index", google="connected"))
 
 
