@@ -34,7 +34,7 @@ def _build_store() -> GoogleConnectionStore:
     primary_db = "data/app_state.db"
     try:
         return GoogleConnectionStore(primary_db)
-    except OSError as exc:
+    except Exception as exc:
         fallback_db = os.path.join(tempfile.gettempdir(), "app_state.db")
         print(f"Failed to open {primary_db}: {exc}. Falling back to {fallback_db}.")
         return GoogleConnectionStore(fallback_db)
@@ -57,6 +57,11 @@ def get_user_google_state() -> dict:
 @app.get("/")
 def index():
     return render_template("index.html")
+
+
+@app.get("/health")
+def health():
+    return jsonify({"ok": True}), 200
 
 
 @app.get("/google/connect")
