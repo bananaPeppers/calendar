@@ -367,10 +367,11 @@ body.wheel-open {
   max-width: 760px;
   max-height: 820px;
   height: 100%;
-  background: linear-gradient(180deg, #ffffff, #fbfdff);
+  background: linear-gradient(180deg, #f8fbff 0%, #edf3fa 100%);
   border-radius: 18px;
   display: flex;
   flex-direction: column;
+  border: 1px solid #d8e0ec;
   box-shadow: 0 30px 80px rgba(2, 6, 23, 0.3);
   overflow: hidden;
   transform: translateY(-72px);
@@ -382,7 +383,8 @@ body.wheel-open {
   justify-content: space-between;
   gap: 12px;
   padding: 18px 20px;
-  border-bottom: 1px solid #eef2f7;
+  border-bottom: 1px solid #d9e1ee;
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.95), rgba(239, 245, 252, 0.9));
 }
 
 .modal-header-actions {
@@ -397,7 +399,7 @@ body.wheel-open {
   border: 0;
   font-size: 20px;
   cursor: pointer;
-  color: #334155;
+  color: #4f627f;
 }
 
 .modal-title-input {
@@ -405,18 +407,18 @@ body.wheel-open {
   min-width: 0;
   height: 42px;
   border-radius: 12px;
-  border: 1px solid #e6e9ef;
-  background: #ffffff;
+  border: 1px solid #c5d4e8;
+  background: #f5f9ff;
   padding: 0 12px;
   font-size: 18px;
   font-weight: 600;
-  color: #0f172a;
+  color: #1d2f4d;
   outline: none;
 }
 
 .modal-title-input:focus {
-  border-color: rgba(37, 99, 235, 0.35);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+  border-color: #86a9d8;
+  box-shadow: 0 0 0 3px rgba(76, 115, 170, 0.14);
 }
 
 .modal-body {
@@ -426,6 +428,7 @@ body.wheel-open {
   gap: 14px;
   flex: 1;
   overflow: auto;
+  background: linear-gradient(180deg, #f4f8fd 0%, #edf3fa 100%);
 }
 
 .field {
@@ -463,7 +466,7 @@ body.wheel-open {
 .label {
   font-size: 14px;
   font-weight: 600;
-  color: var(--muted);
+  color: #62748f;
 }
 
 input[type="date"],
@@ -473,10 +476,10 @@ textarea {
   width: 100%;
   padding: 13px 14px;
   border-radius: 12px;
-  border: 1px solid #e6e9ef;
-  background: #ffffff;
+  border: 1px solid #cfd9e8;
+  background: #f8fbff;
   font-size: 15px;
-  color: var(--text);
+  color: #1f304c;
   outline: none;
 }
 
@@ -491,9 +494,9 @@ textarea {
 
 .mini-calendar {
   margin-top: 8px;
-  border: 1px solid #e6e9ef;
+  border: 1px solid #ccd8e8;
   border-radius: 12px;
-  background: #ffffff;
+  background: linear-gradient(180deg, #f7fbff 0%, #f0f5fc 100%);
   padding: 10px;
 }
 
@@ -507,7 +510,7 @@ textarea {
 .mini-cal-month {
   font-size: 14px;
   font-weight: 600;
-  color: #475569;
+  color: #4f617d;
 }
 
 .mini-cal-nav {
@@ -515,15 +518,15 @@ textarea {
   height: 28px;
   border: 0;
   border-radius: 8px;
-  background: #f1f5f9;
-  color: #334155;
+  background: #e6edf7;
+  color: #4a5e7c;
   font-size: 18px;
   line-height: 1;
   cursor: pointer;
 }
 
 .mini-cal-nav:hover {
-  background: #e6edf6;
+  background: #dbe7f5;
 }
 
 .mini-cal-weekdays,
@@ -560,15 +563,15 @@ textarea {
 }
 
 .mini-cal-day:hover {
-  background: #eaf4ff;
+  background: #e4eefc;
 }
 
 .mini-cal-day.is-today {
-  box-shadow: inset 0 0 0 1px #93c5fd;
+  box-shadow: inset 0 0 0 1px #9ab7de;
 }
 
 .mini-cal-day.is-selected {
-  background: #2563eb;
+  background: #2f67d8;
   color: #ffffff;
   font-weight: 600;
 }
@@ -707,7 +710,7 @@ textarea {
   margin: 16px 0 0;
   text-align: center;
   font-size: 13px;
-  color: #64748b;
+  color: #6a7f9c;
 }
 
 input[type="date"]:focus,

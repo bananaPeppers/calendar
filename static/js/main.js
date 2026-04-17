@@ -39,7 +39,9 @@ const timeDialEndRow = document.getElementById("timeDialEndRow");
 const timeDialEndText = document.getElementById("timeDialEndText");
 const timeDialDuration = document.getElementById("timeDialDuration");
 const modalConflictMessage = document.getElementById("modalConflictMessage");
-const modalConflictText = modalConflictMessage?.querySelector(".modal-conflict-text");
+const modalConflictText = modalConflictMessage?.querySelector(
+  ".modal-conflict-text",
+);
 
 const wheelPicker = document.getElementById("wheelPicker");
 const wheelBackdrop = document.getElementById("wheelBackdrop");
@@ -51,7 +53,11 @@ const wheelDoneBtn = document.getElementById("wheelDoneBtn");
 let defaultEventCounter = 1;
 let isGoogleConnected = false;
 let wheelState = null;
-let miniCalendarView = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let miniCalendarView = new Date(
+  new Date().getFullYear(),
+  new Date().getMonth(),
+  1,
+);
 let miniCalendarSelectedIso = "";
 let dialStartMinutes = 0;
 let dialEndMinutes = 60;
@@ -66,6 +72,8 @@ const DIAL_TOP_MINUTES = 360; // Top of dial = 6:00 AM
 const DIAL_MINUTE_STEP = 15;
 const DIAL_MAX_MINUTES = 1440 - DIAL_MINUTE_STEP;
 const MINUTES_PER_DAY = 1440;
+const END_OF_DAY_MINUTES = MINUTES_PER_DAY - 1;
+const DIAL_DEFAULT_START_TIME = "06:00";
 
 const WHEEL_ITEM_HEIGHT = 44;
 const softClasses = [
@@ -79,10 +87,12 @@ const softClasses = [
 ];
 
 let dialTickAudioCtx = null;
-const DIAL_TICK_MIN_INTERVAL_MS = 24;
+const DIAL_TICK_MIN_INTERVAL_MS = 500;
 const DIAL_TICK_MAX_INTERVAL_MS = 72;
 const DIAL_TICK_MAX_BURST_TICKS = 8;
 const DIAL_TICK_MAX_BURST_WINDOW_MS = 220;
+// Options: "analog_click" | "soft_tock" | "digital_tick"
+const DIAL_TICK_SOUND_PROFILE = "analog_click";
 
 function pad2(num) {
   return String(num).padStart(2, "0");
@@ -131,7 +141,9 @@ function normalizeDateInput(value) {
     }
   }
 
-  const slashMatch = raw.match(/^(\d{1,2})\s*[/-]\s*(\d{1,2})\s*[/-]\s*(\d{4})$/);
+  const slashMatch = raw.match(
+    /^(\d{1,2})\s*[/-]\s*(\d{1,2})\s*[/-]\s*(\d{4})$/,
+  );
   if (slashMatch) {
     const month = Number(slashMatch[1]);
     const day = Number(slashMatch[2]);
@@ -148,7 +160,11 @@ function normalizeDateInput(value) {
 
   const parsed = new Date(raw);
   if (Number.isNaN(parsed.getTime())) return "";
-  return toIsoDate(parsed.getFullYear(), parsed.getMonth() + 1, parsed.getDate());
+  return toIsoDate(
+    parsed.getFullYear(),
+    parsed.getMonth() + 1,
+    parsed.getDate(),
+  );
 }
 
 function normalizeTimeInput(value) {
@@ -209,7 +225,26 @@ function roundMinuteToStep(minute, step = 5) {
 }
 
 function getClockwiseMinutesBetween(startMinutes, endMinutes) {
-  return ((endMinutes - startMinutes) % MINUTES_PER_DAY + MINUTES_PER_DAY) % MINUTES_PER_DAY;
+  return (
+    (((endMinutes - startMinutes) % MINUTES_PER_DAY) + MINUTES_PER_DAY) %
+    MINUTES_PER_DAY
+  );
+}
+
+function getMinimumEndMinutesForStart(startMinutes) {
+  if (startMinutes >= DIAL_MAX_MINUTES) return END_OF_DAY_MINUTES;
+  return Math.min(END_OF_DAY_MINUTES, startMinutes + DIAL_MINUTE_STEP);
+}
+
+function getDefaultEndMinutesForStart(startMinutes) {
+  if (startMinutes >= DIAL_MAX_MINUTES) return END_OF_DAY_MINUTES;
+  return Math.min(END_OF_DAY_MINUTES, startMinutes + 60);
+}
+
+function isValidSameDayRange(startMinutes, endMinutes) {
+  if (endMinutes <= startMinutes) return false;
+  if (startMinutes >= DIAL_MAX_MINUTES) return endMinutes === END_OF_DAY_MINUTES;
+  return endMinutes - startMinutes >= DIAL_MINUTE_STEP;
 }
 
 function getCircularMinuteDistance(aMinutes, bMinutes) {
@@ -225,15 +260,16 @@ function time24ToMinutes(time24) {
 }
 
 function minutesToTime24(totalMinutes) {
-  const safe = ((Number(totalMinutes) % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
+  const safe =
+    ((Number(totalMinutes) % MINUTES_PER_DAY) + MINUTES_PER_DAY) %
+    MINUTES_PER_DAY;
   const hour = Math.floor(safe / 60);
   const minute = safe % 60;
   return `${pad2(hour)}:${pad2(minute)}`;
 }
 
 function formatDurationLabel(startMinutes, endMinutes) {
-  const clockwise = getClockwiseMinutesBetween(startMinutes, endMinutes);
-  const diff = Math.max(DIAL_MINUTE_STEP, clockwise || DIAL_MINUTE_STEP);
+  const diff = Math.max(0, endMinutes - startMinutes);
   const hours = Math.floor(diff / 60);
   const minutes = diff % 60;
   return `${hours}:${pad2(minutes)}`;
@@ -257,6 +293,39 @@ function ensureDialTickAudioReady() {
   return ctx;
 }
 
+function getDialTickProfile() {
+  switch (DIAL_TICK_SOUND_PROFILE) {
+    case "digital_tick":
+      return {
+        oscType: "square",
+        frequency: 1750,
+        peakGain: 0.05,
+        attackSeconds: 0.002,
+        decaySeconds: 0.016,
+        durationSeconds: 0.022,
+      };
+    case "soft_tock":
+      return {
+        oscType: "sine",
+        frequency: 900,
+        peakGain: 0.07,
+        attackSeconds: 0.004,
+        decaySeconds: 0.03,
+        durationSeconds: 0.038,
+      };
+    case "analog_click":
+    default:
+      return {
+        oscType: "triangle",
+        frequency: 1450,
+        peakGain: 0.06,
+        attackSeconds: 0.003,
+        decaySeconds: 0.022,
+        durationSeconds: 0.03,
+      };
+  }
+}
+
 function playDialTickAtOffset(offsetMs = 0) {
   const ctx = getDialTickAudioContext();
   if (!ctx || ctx.state !== "running") return;
@@ -264,19 +333,23 @@ function playDialTickAtOffset(offsetMs = 0) {
   const when = ctx.currentTime + Math.max(0, Number(offsetMs) || 0) / 1000;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
+  const profile = getDialTickProfile();
 
-  osc.type = "triangle";
-  osc.frequency.setValueAtTime(1550, when);
+  osc.type = profile.oscType;
+  osc.frequency.setValueAtTime(profile.frequency, when);
 
   gain.gain.setValueAtTime(0.0001, when);
-  gain.gain.exponentialRampToValueAtTime(0.06, when + 0.003);
-  gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.022);
+  gain.gain.exponentialRampToValueAtTime(
+    profile.peakGain,
+    when + profile.attackSeconds,
+  );
+  gain.gain.exponentialRampToValueAtTime(0.0001, when + profile.decaySeconds);
 
   osc.connect(gain);
   gain.connect(ctx.destination);
 
   osc.start(when);
-  osc.stop(when + 0.028);
+  osc.stop(when + profile.durationSeconds);
 }
 
 function playDialTicksForStepChange(stepCount, elapsedMs = 0) {
@@ -289,11 +362,28 @@ function playDialTicksForStepChange(stepCount, elapsedMs = 0) {
 
   // Faster drags speed up ticks, but cap rate and burst size so sound stays clean.
   const observedElapsed = Math.max(0, Number(elapsedMs) || 0);
-  const rawInterval = observedElapsed > 0 ? observedElapsed / (count - 1) : DIAL_TICK_MIN_INTERVAL_MS;
-  const intervalMs = clamp(rawInterval, DIAL_TICK_MIN_INTERVAL_MS, DIAL_TICK_MAX_INTERVAL_MS);
-  const burstDurationMs = Math.min((count - 1) * intervalMs, DIAL_TICK_MAX_BURST_WINDOW_MS);
-  const maxTicksBySpacing = Math.max(1, Math.floor(burstDurationMs / DIAL_TICK_MIN_INTERVAL_MS) + 1);
-  const playableCount = Math.min(count, DIAL_TICK_MAX_BURST_TICKS, maxTicksBySpacing);
+  const rawInterval =
+    observedElapsed > 0
+      ? observedElapsed / (count - 1)
+      : DIAL_TICK_MIN_INTERVAL_MS;
+  const intervalMs = clamp(
+    rawInterval,
+    DIAL_TICK_MIN_INTERVAL_MS,
+    DIAL_TICK_MAX_INTERVAL_MS,
+  );
+  const burstDurationMs = Math.min(
+    (count - 1) * intervalMs,
+    DIAL_TICK_MAX_BURST_WINDOW_MS,
+  );
+  const maxTicksBySpacing = Math.max(
+    1,
+    Math.floor(burstDurationMs / DIAL_TICK_MIN_INTERVAL_MS) + 1,
+  );
+  const playableCount = Math.min(
+    count,
+    DIAL_TICK_MAX_BURST_TICKS,
+    maxTicksBySpacing,
+  );
 
   for (let i = 0; i < playableCount; i += 1) {
     const progress = playableCount > 1 ? i / (playableCount - 1) : 0;
@@ -347,7 +437,9 @@ function rangesOverlap(a, b) {
 function buildEventRange(startDate, startTime, options = {}) {
   const allDay = Boolean(options.allDay);
   const endDate = options.endDate || startDate;
-  const normalizedStart = allDay ? "00:00" : normalizeTimeInput(startTime || "");
+  const normalizedStart = allDay
+    ? "00:00"
+    : normalizeTimeInput(startTime || "");
   if (!startDate || !normalizedStart) return null;
 
   const startAt = parseIsoDateTime(startDate, normalizedStart);
@@ -361,7 +453,8 @@ function buildEventRange(startDate, startTime, options = {}) {
       endAt.setDate(endAt.getDate() + 1);
     }
   } else {
-    const normalizedEnd = normalizeTimeInput(options.endTime || "") || normalizedStart;
+    const normalizedEnd =
+      normalizeTimeInput(options.endTime || "") || normalizedStart;
     endAt = parseIsoDateTime(endDate || startDate, normalizedEnd);
     if (!endAt) {
       endAt = new Date(startAt);
@@ -383,7 +476,8 @@ function getModalDraftRange() {
 
   const startMinutes = time24ToMinutes(draftStart);
   const endMinutes = time24ToMinutes(draftEnd);
-  if (getClockwiseMinutesBetween(startMinutes, endMinutes) < DIAL_MINUTE_STEP) return null;
+  if (!isValidSameDayRange(startMinutes, endMinutes))
+    return null;
 
   return buildEventRange(draftDate, draftStart, {
     endDate: draftDate,
@@ -412,7 +506,10 @@ function findModalConflictEvent(draftRange) {
     if (!rangesOverlap(draftRange, existingRange)) continue;
 
     return {
-      title: row.dataset.title || row.querySelector(".event-title")?.textContent?.trim() || "Existing event",
+      title:
+        row.dataset.title ||
+        row.querySelector(".event-title")?.textContent?.trim() ||
+        "Existing event",
       startTime,
       endTime,
       allDay,
@@ -443,7 +540,9 @@ function validateModalTimeConflict() {
   const timeRangeText = conflict.allDay
     ? "All day"
     : `${formatTimeDisplay(conflict.startTime)} - ${formatTimeDisplay(conflict.endTime)}`;
-  setModalConflictMessage(`Time conflict with "${conflict.title}" (${timeRangeText}).`);
+  setModalConflictMessage(
+    `Time conflict with "${conflict.title}" (${timeRangeText}).`,
+  );
   return true;
 }
 
@@ -479,7 +578,9 @@ function consumeQueryMessages() {
     params.delete("google");
     params.delete("google_error");
     const query = params.toString();
-    const next = query ? `${window.location.pathname}?${query}` : window.location.pathname;
+    const next = query
+      ? `${window.location.pathname}?${query}`
+      : window.location.pathname;
     window.history.replaceState({}, "", next);
   }
 }
@@ -594,7 +695,12 @@ function insertGroupInDateOrder(group, dateString) {
   eventsList.appendChild(group);
 }
 
-function insertEventInTimeOrder(groupEventsEl, row, timeString, allDay = false) {
+function insertEventInTimeOrder(
+  groupEventsEl,
+  row,
+  timeString,
+  allDay = false,
+) {
   if (!groupEventsEl) return;
   const target = getTimeSortValue(timeString, allDay);
   const rows = groupEventsEl.querySelectorAll(".event-row");
@@ -629,7 +735,8 @@ function addEventToList(date, time, title, options = {}) {
   const safeTitle = (title || "").trim() || "Untitled event";
   const normalizedStartTime = normalizeTimeInput(time) || "00:00";
   const normalizedEndTime = normalizeTimeInput(endTime) || normalizedStartTime;
-  if (!shouldDisplayInUpcoming(date, time, { allDay, endTime, endDate })) return;
+  if (!shouldDisplayInUpcoming(date, time, { allDay, endTime, endDate }))
+    return;
 
   let group = eventsList.querySelector(`[data-date="${date}"]`);
   if (!group) {
@@ -705,7 +812,11 @@ function renderMiniCalendar() {
   const daysInMonth = getDaysInMonth(year, monthIndex + 1);
   const todayIso = getTodayIsoDate();
 
-  miniCalMonthLabel.textContent = new Date(year, monthIndex, 1).toLocaleDateString(undefined, {
+  miniCalMonthLabel.textContent = new Date(
+    year,
+    monthIndex,
+    1,
+  ).toLocaleDateString(undefined, {
     month: "long",
     year: "numeric",
   });
@@ -726,7 +837,10 @@ function renderMiniCalendar() {
     btn.className = "mini-cal-day";
     btn.textContent = String(day);
     btn.setAttribute("role", "gridcell");
-    btn.setAttribute("aria-label", new Date(year, monthIndex, day).toDateString());
+    btn.setAttribute(
+      "aria-label",
+      new Date(year, monthIndex, day).toDateString(),
+    );
     if (isoDate === miniCalendarSelectedIso) btn.classList.add("is-selected");
     if (isoDate === todayIso) btn.classList.add("is-today");
 
@@ -769,20 +883,23 @@ function syncMiniCalendarFromInput() {
 }
 
 function minutesToDialAngle(minutes) {
-  const normalized = ((minutes - DIAL_TOP_MINUTES) % MINUTES_PER_DAY + MINUTES_PER_DAY) % MINUTES_PER_DAY;
+  const normalized =
+    (((minutes - DIAL_TOP_MINUTES) % MINUTES_PER_DAY) + MINUTES_PER_DAY) %
+    MINUTES_PER_DAY;
   return (normalized / MINUTES_PER_DAY) * 360;
 }
 
-function getDialMinutesFromPoint(clientX, clientY) {
+function getDialMinutesFromPoint(clientX, clientY, maxMinutes = DIAL_MAX_MINUTES) {
   if (!timeDialRing) return 0;
   const rect = timeDialRing.getBoundingClientRect();
   const cx = rect.left + rect.width / 2;
   const cy = rect.top + rect.height / 2;
   let angle = (Math.atan2(clientY - cy, clientX - cx) * 180) / Math.PI + 90;
   if (angle < 0) angle += 360;
-  const raw = ((angle / 360) * MINUTES_PER_DAY + DIAL_TOP_MINUTES) % MINUTES_PER_DAY;
+  const raw =
+    ((angle / 360) * MINUTES_PER_DAY + DIAL_TOP_MINUTES) % MINUTES_PER_DAY;
   const snapped = Math.round(raw / DIAL_MINUTE_STEP) * DIAL_MINUTE_STEP;
-  return clamp(snapped, 0, DIAL_MAX_MINUTES);
+  return clamp(snapped, 0, maxMinutes);
 }
 
 function setDialEndHandleVisible(visible) {
@@ -804,7 +921,9 @@ function placeDialHandle(handle, minutes) {
   if (!timeDialRing || !handle) return;
   const rect = timeDialRing.getBoundingClientRect();
   const radius = rect.width / 2 - rect.width * 0.038;
-  const normalized = ((minutes - DIAL_TOP_MINUTES) % MINUTES_PER_DAY + MINUTES_PER_DAY) % MINUTES_PER_DAY;
+  const normalized =
+    (((minutes - DIAL_TOP_MINUTES) % MINUTES_PER_DAY) + MINUTES_PER_DAY) %
+    MINUTES_PER_DAY;
   const angle = (normalized / MINUTES_PER_DAY) * Math.PI * 2 - Math.PI / 2;
   const x = rect.width / 2 + Math.cos(angle) * radius;
   const y = rect.height / 2 + Math.sin(angle) * radius;
@@ -830,37 +949,49 @@ function renderTimeDial() {
   if (timeDialStartText) timeDialStartText.textContent = startText;
   if (timeDialEndRow) timeDialEndRow.hidden = !isDialEndTimePlaced;
   if (timeDialEndText) timeDialEndText.textContent = endText;
-  if (timeDialDuration) timeDialDuration.textContent = `Duration ${formatDurationLabel(dialStartMinutes, dialEndMinutes)}`;
+  if (timeDialDuration)
+    timeDialDuration.textContent = `Duration ${formatDurationLabel(dialStartMinutes, dialEndMinutes)}`;
   validateModalTimeConflict();
 }
 
 function setDialFromInputValues() {
-  const now = new Date();
-  const defaultStart = `${pad2(now.getHours())}:${pad2(roundMinuteToStep(now.getMinutes(), DIAL_MINUTE_STEP))}`;
-  const startNormalized = normalizeTimeInput(eventTime?.value || "") || defaultStart;
+  const defaultStart = DIAL_DEFAULT_START_TIME;
+  const startNormalized =
+    normalizeTimeInput(eventTime?.value || "") || defaultStart;
   const fallbackEnd = (() => {
     const startMin = clamp(
-      Math.round(time24ToMinutes(startNormalized) / DIAL_MINUTE_STEP) * DIAL_MINUTE_STEP,
+      Math.round(time24ToMinutes(startNormalized) / DIAL_MINUTE_STEP) *
+        DIAL_MINUTE_STEP,
       0,
       DIAL_MAX_MINUTES,
     );
-    return minutesToTime24((startMin + 60) % MINUTES_PER_DAY);
+    return minutesToTime24(getDefaultEndMinutesForStart(startMin));
   })();
-  const endNormalized = normalizeTimeInput(eventEndTime?.value || "") || fallbackEnd;
+  const endNormalized =
+    normalizeTimeInput(eventEndTime?.value || "") || fallbackEnd;
 
   dialStartMinutes = clamp(
-    Math.round(time24ToMinutes(startNormalized) / DIAL_MINUTE_STEP) * DIAL_MINUTE_STEP,
+    Math.round(time24ToMinutes(startNormalized) / DIAL_MINUTE_STEP) *
+      DIAL_MINUTE_STEP,
     0,
     DIAL_MAX_MINUTES,
   );
-  dialEndMinutes = clamp(
-    Math.round(time24ToMinutes(endNormalized) / DIAL_MINUTE_STEP) * DIAL_MINUTE_STEP,
+  let normalizedEndMinutes = clamp(
+    Math.round(time24ToMinutes(endNormalized) / DIAL_MINUTE_STEP) *
+      DIAL_MINUTE_STEP,
     0,
     DIAL_MAX_MINUTES,
   );
-  if (getClockwiseMinutesBetween(dialStartMinutes, dialEndMinutes) < DIAL_MINUTE_STEP) {
-    dialEndMinutes = (dialStartMinutes + 60) % MINUTES_PER_DAY;
+  if (
+    dialStartMinutes >= DIAL_MAX_MINUTES &&
+    normalizeTimeInput(endNormalized) === "23:59"
+  ) {
+    normalizedEndMinutes = END_OF_DAY_MINUTES;
   }
+  dialEndMinutes = Math.max(
+    normalizedEndMinutes,
+    getMinimumEndMinutesForStart(dialStartMinutes),
+  );
   setDialEndHandleVisible(false);
   isDialEndTimePlaced = false;
   didMoveStartInCurrentDrag = false;
@@ -874,39 +1005,67 @@ function chooseClosestDialHandle(targetMinutes) {
   return startDist <= endDist ? "start" : "end";
 }
 
-function updateActiveDialHandle(clientX, clientY, eventTimestamp = performance.now()) {
-  const nextMinutes = getDialMinutesFromPoint(clientX, clientY);
+function updateActiveDialHandle(
+  clientX,
+  clientY,
+  eventTimestamp = performance.now(),
+) {
   const previousStart = dialStartMinutes;
   const previousEnd = dialEndMinutes;
+  const maxForActiveHandle =
+    activeDialHandle === "end" ? END_OF_DAY_MINUTES : DIAL_MAX_MINUTES;
+  const nextMinutes = getDialMinutesFromPoint(
+    clientX,
+    clientY,
+    maxForActiveHandle,
+  );
   if (activeDialHandle === "start") {
     if (!isDialEndHandleVisible) {
       dialStartMinutes = clamp(nextMinutes, 0, DIAL_MAX_MINUTES);
       if (dialStartMinutes !== previousStart) {
         didMoveStartInCurrentDrag = true;
       }
-      dialEndMinutes = (dialStartMinutes + 60) % MINUTES_PER_DAY;
+      dialEndMinutes = getDefaultEndMinutesForStart(dialStartMinutes);
     } else {
       dialStartMinutes = clamp(nextMinutes, 0, DIAL_MAX_MINUTES);
-      if (getClockwiseMinutesBetween(dialStartMinutes, dialEndMinutes) < DIAL_MINUTE_STEP) {
-        dialStartMinutes = (dialEndMinutes - DIAL_MINUTE_STEP + MINUTES_PER_DAY) % MINUTES_PER_DAY;
-      }
+      dialEndMinutes = Math.max(
+        dialEndMinutes,
+        getMinimumEndMinutesForStart(dialStartMinutes),
+      );
     }
   } else if (activeDialHandle === "end") {
-    dialEndMinutes = clamp(nextMinutes, 0, DIAL_MAX_MINUTES);
-    if (getClockwiseMinutesBetween(dialStartMinutes, dialEndMinutes) < DIAL_MINUTE_STEP) {
-      dialEndMinutes = (dialStartMinutes + DIAL_MINUTE_STEP) % MINUTES_PER_DAY;
+    let proposedEnd = clamp(nextMinutes, 0, END_OF_DAY_MINUTES);
+    // If user keeps dragging forward past day-end, keep end pinned at 11:59 PM.
+    if (
+      previousEnd === END_OF_DAY_MINUTES &&
+      proposedEnd < DIAL_TOP_MINUTES
+    ) {
+      proposedEnd = END_OF_DAY_MINUTES;
     }
+    // Fast mobile drags can skip straight across the wrap point in one frame.
+    // If we're already near day-end and pointer lands in early-day, keep it pinned.
+    const isNearDayEnd = previousEnd >= END_OF_DAY_MINUTES - 60;
+    const wrappedPastDayEnd = proposedEnd < DIAL_TOP_MINUTES;
+    if (isNearDayEnd && wrappedPastDayEnd) {
+      proposedEnd = END_OF_DAY_MINUTES;
+    }
+    dialEndMinutes = Math.max(
+      proposedEnd,
+      getMinimumEndMinutesForStart(dialStartMinutes),
+    );
     isDialEndTimePlaced = true;
   }
 
-  const movedMinutes = activeDialHandle === "end"
-    ? Math.abs(dialEndMinutes - previousEnd)
-    : Math.abs(dialStartMinutes - previousStart);
+  const movedMinutes =
+    activeDialHandle === "end"
+      ? Math.abs(dialEndMinutes - previousEnd)
+      : Math.abs(dialStartMinutes - previousStart);
   const movedSteps = Math.floor(movedMinutes / DIAL_MINUTE_STEP);
   if (movedSteps > 0) {
-    const elapsed = lastDialUpdateTimestamp > 0
-      ? Math.max(0, eventTimestamp - lastDialUpdateTimestamp)
-      : 0;
+    const elapsed =
+      lastDialUpdateTimestamp > 0
+        ? Math.max(0, eventTimestamp - lastDialUpdateTimestamp)
+        : 0;
     playDialTicksForStepChange(movedSteps, elapsed);
   }
   lastDialUpdateTimestamp = eventTimestamp;
@@ -966,7 +1125,11 @@ function buildWheelColumn(key, options, selectedValue) {
     clearTimeout(column._wheelSnapTimer);
     column._wheelSnapTimer = setTimeout(() => {
       const maxIndex = Math.max(options.length - 1, 0);
-      const index = clamp(Math.round(column.scrollTop / WHEEL_ITEM_HEIGHT), 0, maxIndex);
+      const index = clamp(
+        Math.round(column.scrollTop / WHEEL_ITEM_HEIGHT),
+        0,
+        maxIndex,
+      );
       snapColumnToIndex(column, index, "auto");
     }, 70);
   });
@@ -1017,7 +1180,9 @@ function renderDateWheel() {
 
   const monthOptions = Array.from({ length: 12 }, (_, i) => ({
     value: String(i + 1),
-    label: new Date(2026, i, 1).toLocaleDateString(undefined, { month: "short" }),
+    label: new Date(2026, i, 1).toLocaleDateString(undefined, {
+      month: "short",
+    }),
   }));
   const dayOptions = Array.from({ length: maxDay }, (_, i) => ({
     value: String(i + 1),
@@ -1037,9 +1202,15 @@ function renderDateWheel() {
 
   wheelColumns.style.setProperty("--wheel-columns", "3");
   wheelColumns.innerHTML = "";
-  wheelColumns.appendChild(buildWheelColumn("month", monthOptions, wheelState.values.month));
-  wheelColumns.appendChild(buildWheelColumn("day", dayOptions, wheelState.values.day));
-  wheelColumns.appendChild(buildWheelColumn("year", yearOptions, wheelState.values.year));
+  wheelColumns.appendChild(
+    buildWheelColumn("month", monthOptions, wheelState.values.month),
+  );
+  wheelColumns.appendChild(
+    buildWheelColumn("day", dayOptions, wheelState.values.day),
+  );
+  wheelColumns.appendChild(
+    buildWheelColumn("year", yearOptions, wheelState.values.year),
+  );
 }
 
 function renderTimeWheel() {
@@ -1066,9 +1237,15 @@ function renderTimeWheel() {
 
   wheelColumns.style.setProperty("--wheel-columns", "3");
   wheelColumns.innerHTML = "";
-  wheelColumns.appendChild(buildWheelColumn("hour", hourOptions, wheelState.values.hour));
-  wheelColumns.appendChild(buildWheelColumn("minute", minuteOptions, wheelState.values.minute));
-  wheelColumns.appendChild(buildWheelColumn("period", periodOptions, wheelState.values.period));
+  wheelColumns.appendChild(
+    buildWheelColumn("hour", hourOptions, wheelState.values.hour),
+  );
+  wheelColumns.appendChild(
+    buildWheelColumn("minute", minuteOptions, wheelState.values.minute),
+  );
+  wheelColumns.appendChild(
+    buildWheelColumn("period", periodOptions, wheelState.values.period),
+  );
 }
 
 function onWheelValueChanged(key) {
@@ -1091,13 +1268,19 @@ function openWheelPicker(kind) {
   };
 
   if (kind === "date") {
-    const iso = normalizeDateInput(input.value) || toIsoDate(
-      new Date().getFullYear(),
-      new Date().getMonth() + 1,
-      new Date().getDate(),
-    );
+    const iso =
+      normalizeDateInput(input.value) ||
+      toIsoDate(
+        new Date().getFullYear(),
+        new Date().getMonth() + 1,
+        new Date().getDate(),
+      );
     const [year, month, day] = iso.split("-");
-    wheelState.values = { year, month: String(Number(month)), day: String(Number(day)) };
+    wheelState.values = {
+      year,
+      month: String(Number(month)),
+      day: String(Number(day)),
+    };
     wheelPickerTitle.textContent = "Select Date";
     renderDateWheel();
   } else {
@@ -1107,8 +1290,13 @@ function openWheelPicker(kind) {
     const normalized = normalizeTimeInput(input.value) || defaultTime;
     const parts = time24ToParts(normalized);
     const minuteRounded = pad2(roundMinuteToStep(parts.minute, 5));
-    wheelState.values = { hour: parts.hour, minute: minuteRounded, period: parts.period };
-    wheelPickerTitle.textContent = kind === "end-time" ? "Select End Time" : "Select Time";
+    wheelState.values = {
+      hour: parts.hour,
+      minute: minuteRounded,
+      period: parts.period,
+    };
+    wheelPickerTitle.textContent =
+      kind === "end-time" ? "Select End Time" : "Select Time";
     renderTimeWheel();
   }
 
@@ -1215,17 +1403,12 @@ function openModal() {
   const yyyy = now.getFullYear();
   const mm = pad2(now.getMonth() + 1);
   const dd = pad2(now.getDate());
-  if (eventDate) eventDate.value = formatDateDisplayFromIso(`${yyyy}-${mm}-${dd}`);
+  if (eventDate)
+    eventDate.value = formatDateDisplayFromIso(`${yyyy}-${mm}-${dd}`);
   syncMiniCalendarFromInput();
 
-  const hh = pad2(now.getHours());
-  const mins = pad2(now.getMinutes());
-  if (eventTime) eventTime.value = formatTimeDisplay(`${hh}:${mins}`);
-
-  const end = new Date(now.getTime() + 60 * 60 * 1000);
-  const endHH = pad2(end.getHours());
-  const endMM = pad2(end.getMinutes());
-  if (eventEndTime) eventEndTime.value = formatTimeDisplay(`${endHH}:${endMM}`);
+  if (eventTime) eventTime.value = formatTimeDisplay(DIAL_DEFAULT_START_TIME);
+  if (eventEndTime) eventEndTime.value = formatTimeDisplay("07:00");
   setDialFromInputValues();
 
   if (eventTitle) {
@@ -1269,7 +1452,8 @@ eventTitle?.addEventListener("focus", (e) => {
 });
 
 eventTitle?.addEventListener("input", (e) => {
-  if (e.target.dataset.isDefault === "true") e.target.dataset.isDefault = "false";
+  if (e.target.dataset.isDefault === "true")
+    e.target.dataset.isDefault = "false";
 });
 
 eventDate?.addEventListener("blur", () => {
@@ -1277,12 +1461,20 @@ eventDate?.addEventListener("blur", () => {
 });
 
 miniCalPrev?.addEventListener("click", () => {
-  miniCalendarView = new Date(miniCalendarView.getFullYear(), miniCalendarView.getMonth() - 1, 1);
+  miniCalendarView = new Date(
+    miniCalendarView.getFullYear(),
+    miniCalendarView.getMonth() - 1,
+    1,
+  );
   renderMiniCalendar();
 });
 
 miniCalNext?.addEventListener("click", () => {
-  miniCalendarView = new Date(miniCalendarView.getFullYear(), miniCalendarView.getMonth() + 1, 1);
+  miniCalendarView = new Date(
+    miniCalendarView.getFullYear(),
+    miniCalendarView.getMonth() + 1,
+    1,
+  );
   renderMiniCalendar();
 });
 
@@ -1322,7 +1514,11 @@ timeDialRing?.addEventListener("pointerdown", (event) => {
       event.currentTarget.setPointerCapture(event.pointerId);
     } catch {}
   }
-  if (event.target === timeDialStartHandle || event.target === timeDialEndHandle) return;
+  if (
+    event.target === timeDialStartHandle ||
+    event.target === timeDialEndHandle
+  )
+    return;
   const minutes = getDialMinutesFromPoint(event.clientX, event.clientY);
   activeDialHandle = chooseClosestDialHandle(minutes);
   if (activeDialHandle === "start") {
@@ -1371,20 +1567,27 @@ eventForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
   clearAppMessage();
 
-  const title = (eventTitle?.value || "").trim() || `Event ${defaultEventCounter}`;
+  const title =
+    (eventTitle?.value || "").trim() || `Event ${defaultEventCounter}`;
   const normalizedDate = normalizeDateInput(eventDate?.value || "");
   const normalizedStart = normalizeTimeInput(eventTime?.value || "");
   const normalizedEnd = normalizeTimeInput(eventEndTime?.value || "");
 
   if (!normalizedDate || !normalizedStart || !normalizedEnd) {
-    showAppMessage("Use valid date and time values (MM/DD/YYYY, h:mm AM/PM, or 24h).", "error");
+    showAppMessage(
+      "Use valid date and time values (MM/DD/YYYY, h:mm AM/PM, or 24h).",
+      "error",
+    );
     return;
   }
 
   const startMinutes = time24ToMinutes(normalizedStart);
   const endMinutes = time24ToMinutes(normalizedEnd);
-  if (getClockwiseMinutesBetween(startMinutes, endMinutes) < DIAL_MINUTE_STEP) {
-    showAppMessage("End time must be at least 15 minutes after start time.", "error");
+  if (!isValidSameDayRange(startMinutes, endMinutes)) {
+    showAppMessage(
+      "End time must be after start time (11:45 PM auto-ends at 11:59 PM).",
+      "error",
+    );
     return;
   }
 
@@ -1402,11 +1605,16 @@ eventForm?.addEventListener("submit", async (e) => {
         time_zone: getBrowserTimeZone(),
       });
       if (createdEvent) {
-        addEventToList(createdEvent.date, createdEvent.time, createdEvent.title, {
-          endTime: createdEvent.end_time,
-          endDate: createdEvent.end_date,
-          allDay: createdEvent.all_day,
-        });
+        addEventToList(
+          createdEvent.date,
+          createdEvent.time,
+          createdEvent.title,
+          {
+            endTime: createdEvent.end_time,
+            endDate: createdEvent.end_date,
+            allDay: createdEvent.all_day,
+          },
+        );
       }
     } else {
       addEventToList(normalizedDate, normalizedStart, title, {
