@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 from dotenv import load_dotenv
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from google_calendar_service import (
     GoogleIntegrationError,
@@ -21,6 +22,7 @@ from google_store import GoogleConnectionStore
 load_dotenv()
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "change-this-dev-secret")
 app.config["SESSION_PERMANENT"] = True
 app.permanent_session_lifetime = timedelta(days=3650)
@@ -83,8 +85,10 @@ def google_connect():
 @app.get("/google/callback")
 def google_callback():
     oauth_error = request.args.get("error")
+    oauth_error_description = request.args.get("error_description")
     if oauth_error:
-        return redirect(url_for("index", google_error=oauth_error))
+        message = oauth_error_description or oauth_error
+        return redirect(url_for("index", google_error=message))
 
     state = session.get("google_oauth_state")
     if not state:
@@ -92,10 +96,16 @@ def google_callback():
 
     try:
         flow = build_oauth_flow(state=state)
-        flow.fetch_token(authorization_response=request.url)
+        authorization_response = request.url
+        forwarded_proto = request.headers.get("X-Forwarded-Proto", "").split(",")[0].strip().lower()
+        if forwarded_proto == "https" and authorization_response.startswith("http://"):
+            authorization_response = "https://" + authorization_response[len("http://") :]
+
+        flow.fetch_token(authorization_response=authorization_response)
         creds_dict = credentials_to_dict(flow.credentials)
-    except Exception:
-        return redirect(url_for("index", google_error="Failed to authorize Google Calendar"))
+    except Exception as exc:
+        app.logger.exception("Failed to authorize Google Calendar callback")
+        return redirect(url_for("index", google_error=f"Failed to authorize Google Calendar: {exc}"))
 
     user_key = get_user_key()
     existing = store.get_connection_state(user_key).get("credentials") or {}
