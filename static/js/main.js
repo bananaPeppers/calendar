@@ -318,6 +318,57 @@ function getDateSortValue(dateString) {
   return Number.isNaN(stamp) ? Number.MAX_SAFE_INTEGER : stamp;
 }
 
+function parseIsoDateTime(dateString, timeString = "00:00") {
+  const dateMatch = String(dateString || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const normalizedTime = normalizeTimeInput(timeString) || "00:00";
+  const timeMatch = normalizedTime.match(/^(\d{2}):(\d{2})$/);
+  if (!dateMatch || !timeMatch) return null;
+
+  const year = Number(dateMatch[1]);
+  const month = Number(dateMatch[2]);
+  const day = Number(dateMatch[3]);
+  const hour = Number(timeMatch[1]);
+  const minute = Number(timeMatch[2]);
+  return new Date(year, month - 1, day, hour, minute, 0, 0);
+}
+
+function shouldDisplayInUpcoming(date, time, options = {}) {
+  const allDay = Boolean(options.allDay);
+  const endDate = options.endDate || date;
+  const endTime = options.endTime || "";
+
+  const startAt = parseIsoDateTime(date, allDay ? "00:00" : time);
+  if (!startAt || Number.isNaN(startAt.getTime())) return false;
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const dayAfterTomorrowStart = new Date(todayStart);
+  dayAfterTomorrowStart.setDate(dayAfterTomorrowStart.getDate() + 2);
+
+  if (startAt < todayStart) return false;
+  if (startAt >= dayAfterTomorrowStart) return false;
+
+  const now = new Date();
+  let endAt = null;
+  if (allDay) {
+    endAt = parseIsoDateTime(endDate || date, "00:00");
+    if (!endAt || endAt <= startAt) {
+      endAt = new Date(startAt);
+      endAt.setDate(endAt.getDate() + 1);
+    }
+  } else {
+    endAt = endTime ? parseIsoDateTime(date, endTime) : null;
+    if (!endAt) {
+      endAt = new Date(startAt);
+      endAt.setMinutes(endAt.getMinutes() + 1);
+    }
+    if (endAt <= startAt) endAt.setDate(endAt.getDate() + 1);
+  }
+
+  return endAt > now;
+}
+
 function getTimeSortValue(timeString, allDay = false) {
   if (allDay) return -1;
   const normalized = normalizeTimeInput(timeString);
@@ -379,7 +430,9 @@ function addEventToList(date, time, title, options = {}) {
 
   const allDay = Boolean(options.allDay);
   const endTime = options.endTime || "";
+  const endDate = options.endDate || date;
   const safeTitle = (title || "").trim() || "Untitled event";
+  if (!shouldDisplayInUpcoming(date, time, { allDay, endTime, endDate })) return;
 
   let group = eventsList.querySelector(`[data-date="${date}"]`);
   if (!group) {
@@ -896,6 +949,7 @@ async function loadGoogleEvents() {
     events.forEach((event) => {
       addEventToList(event.date, event.time, event.title, {
         endTime: event.end_time,
+        endDate: event.end_date,
         allDay: event.all_day,
       });
     });
@@ -1093,6 +1147,7 @@ eventForm?.addEventListener("submit", async (e) => {
       if (createdEvent) {
         addEventToList(createdEvent.date, createdEvent.time, createdEvent.title, {
           endTime: createdEvent.end_time,
+          endDate: createdEvent.end_date,
           allDay: createdEvent.all_day,
         });
       }

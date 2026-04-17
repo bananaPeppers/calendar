@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Flask Frontend — Index</title>
+    <title>Samip's Calendar</title>
     <link rel="stylesheet" href="/static/css/style.css" />
   </head>
   <body>
@@ -14,18 +14,26 @@
           <span id="dateTab" class="header-date"></span>
         </div>
         <div class="header-actions">
-          <a id="googleConnectBtn" href="/google/connect" class="google-connect-btn" hidden>
-            Connect Google Calendar
+          <a
+            id="googleConnectBtn"
+            href="/google/connect"
+            class="google-connect-btn"
+            hidden
+          >
+            <span class="google-connect-label">Sign in</span>
+            <span class="google-connect-icon-wrap">
+              <img src="/static/images/google.png" alt="" aria-hidden="true" />
+            </span>
           </a>
           <button
             id="googleDisconnectBtn"
             type="button"
             class="google-disconnect-btn"
             aria-label="Disconnect Google Calendar"
-            title="Disconnect Google Calendar"
+            title="Google connected (click to disconnect)"
             hidden
           >
-            <img src="/static/images/logout.svg" alt="" />
+            <img src="/static/images/google.png" alt="Google connected" />
           </button>
           <button id="addEventBtn" type="button" class="add-event-btn">
             <svg
@@ -51,7 +59,13 @@
     <main class="main-content">
       <div class="container">
         <h2 class="section-label">Upcoming events</h2>
-        <p id="appMessage" class="app-message" role="status" aria-live="polite" hidden></p>
+        <p
+          id="appMessage"
+          class="app-message"
+          role="status"
+          aria-live="polite"
+          hidden
+        ></p>
 
         <div class="events-panel">
           <ul id="eventsList" aria-live="polite" class="events-root-list"></ul>
@@ -123,20 +137,42 @@
               placeholder="MM/DD/YYYY"
               required
             />
-            <div id="miniCalendar" class="mini-calendar" aria-label="Mini calendar">
+            <div
+              id="miniCalendar"
+              class="mini-calendar"
+              aria-label="Mini calendar"
+            >
               <div class="mini-cal-header">
-                <button id="miniCalPrev" type="button" class="mini-cal-nav" aria-label="Previous month">
+                <button
+                  id="miniCalPrev"
+                  type="button"
+                  class="mini-cal-nav"
+                  aria-label="Previous month"
+                >
                   &#8249;
                 </button>
-                <span id="miniCalMonthLabel" class="mini-cal-month">Month Year</span>
-                <button id="miniCalNext" type="button" class="mini-cal-nav" aria-label="Next month">
+                <span id="miniCalMonthLabel" class="mini-cal-month"
+                  >Month Year</span
+                >
+                <button
+                  id="miniCalNext"
+                  type="button"
+                  class="mini-cal-nav"
+                  aria-label="Next month"
+                >
                   &#8250;
                 </button>
               </div>
               <div class="mini-cal-weekdays" aria-hidden="true">
-                <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+                <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span
+                ><span>Thu</span><span>Fri</span><span>Sat</span>
               </div>
-              <div id="miniCalGrid" class="mini-cal-grid" role="grid" aria-label="Select date"></div>
+              <div
+                id="miniCalGrid"
+                class="mini-cal-grid"
+                role="grid"
+                aria-label="Select date"
+              ></div>
             </div>
           </div>
 
@@ -145,34 +181,60 @@
 
           <div id="timeDial" class="time-dial" aria-label="Time dial">
             <div id="timeDialRing" class="time-dial-ring">
-              <button id="timeDialStartHandle" type="button" class="time-dial-handle is-start" aria-label="Adjust start time"></button>
-              <button id="timeDialEndHandle" type="button" class="time-dial-handle is-end" aria-label="Adjust end time"></button>
+              <button
+                id="timeDialStartHandle"
+                type="button"
+                class="time-dial-handle is-start"
+                aria-label="Adjust start time"
+              ></button>
+              <button
+                id="timeDialEndHandle"
+                type="button"
+                class="time-dial-handle is-end"
+                aria-label="Adjust end time"
+              ></button>
 
               <div class="time-dial-center">
                 <div class="time-dial-center-row">
                   <span class="time-dial-center-label is-start">Start</span>
-                  <span id="timeDialStartText" class="time-dial-center-time">--</span>
+                  <span id="timeDialStartText" class="time-dial-center-time"
+                    >--</span
+                  >
                 </div>
                 <div id="timeDialEndRow" class="time-dial-center-row">
                   <span class="time-dial-center-label is-end">End</span>
-                  <span id="timeDialEndText" class="time-dial-center-time">--</span>
+                  <span id="timeDialEndText" class="time-dial-center-time"
+                    >--</span
+                  >
                 </div>
               </div>
             </div>
             <p id="timeDialDuration" class="time-dial-duration"></p>
           </div>
-
         </form>
       </div>
     </div>
 
     <div id="wheelPicker" class="wheel-picker" hidden aria-hidden="true">
       <div id="wheelBackdrop" class="wheel-backdrop"></div>
-      <div class="wheel-sheet" role="dialog" aria-modal="true" aria-labelledby="wheelPickerTitle">
+      <div
+        class="wheel-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="wheelPickerTitle"
+      >
         <div class="wheel-toolbar">
-          <button id="wheelCancelBtn" type="button" class="wheel-btn">Cancel</button>
+          <button id="wheelCancelBtn" type="button" class="wheel-btn">
+            Cancel
+          </button>
           <div id="wheelPickerTitle" class="wheel-title">Select</div>
-          <button id="wheelDoneBtn" type="button" class="wheel-btn wheel-btn--done">Done</button>
+          <button
+            id="wheelDoneBtn"
+            type="button"
+            class="wheel-btn wheel-btn--done"
+          >
+            Done
+          </button>
         </div>
         <div id="wheelColumns" class="wheel-columns"></div>
         <div class="wheel-selection-row" aria-hidden="true"></div>
