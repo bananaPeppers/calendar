@@ -38,6 +38,8 @@ const timeDialStartText = document.getElementById("timeDialStartText");
 const timeDialEndRow = document.getElementById("timeDialEndRow");
 const timeDialEndText = document.getElementById("timeDialEndText");
 const timeDialDuration = document.getElementById("timeDialDuration");
+const modalConflictMessage = document.getElementById("modalConflictMessage");
+const modalConflictText = modalConflictMessage?.querySelector(".modal-conflict-text");
 
 const wheelPicker = document.getElementById("wheelPicker");
 const wheelBackdrop = document.getElementById("wheelBackdrop");
@@ -246,6 +248,136 @@ function clearAppMessage() {
   appMessage.classList.remove("is-success", "is-error");
 }
 
+function setModalConflictMessage(message = "") {
+  const text = String(message || "").trim();
+  const hasConflict = Boolean(text);
+
+  if (modalConflictMessage) {
+    modalConflictMessage.hidden = !hasConflict;
+    if (modalConflictText) {
+      modalConflictText.textContent = text;
+    } else {
+      modalConflictMessage.textContent = text;
+    }
+  }
+
+  if (saveModalBtn) {
+    saveModalBtn.disabled = hasConflict;
+  }
+}
+
+function clearModalConflictMessage() {
+  setModalConflictMessage("");
+}
+
+function rangesOverlap(a, b) {
+  if (!a || !b) return false;
+  return a.startAt < b.endAt && b.startAt < a.endAt;
+}
+
+function buildEventRange(startDate, startTime, options = {}) {
+  const allDay = Boolean(options.allDay);
+  const endDate = options.endDate || startDate;
+  const normalizedStart = allDay ? "00:00" : normalizeTimeInput(startTime || "");
+  if (!startDate || !normalizedStart) return null;
+
+  const startAt = parseIsoDateTime(startDate, normalizedStart);
+  if (!startAt || Number.isNaN(startAt.getTime())) return null;
+
+  let endAt = null;
+  if (allDay) {
+    endAt = parseIsoDateTime(endDate || startDate, "00:00");
+    if (!endAt || endAt <= startAt) {
+      endAt = new Date(startAt);
+      endAt.setDate(endAt.getDate() + 1);
+    }
+  } else {
+    const normalizedEnd = normalizeTimeInput(options.endTime || "") || normalizedStart;
+    endAt = parseIsoDateTime(endDate || startDate, normalizedEnd);
+    if (!endAt) {
+      endAt = new Date(startAt);
+      endAt.setMinutes(endAt.getMinutes() + 1);
+    }
+    if (endAt <= startAt) {
+      endAt.setDate(endAt.getDate() + 1);
+    }
+  }
+
+  return { startAt, endAt };
+}
+
+function getModalDraftRange() {
+  const draftDate = normalizeDateInput(eventDate?.value || "");
+  const draftStart = normalizeTimeInput(eventTime?.value || "");
+  const draftEnd = normalizeTimeInput(eventEndTime?.value || "");
+  if (!draftDate || !draftStart || !draftEnd) return null;
+
+  const startMinutes = time24ToMinutes(draftStart);
+  const endMinutes = time24ToMinutes(draftEnd);
+  if (getClockwiseMinutesBetween(startMinutes, endMinutes) < DIAL_MINUTE_STEP) return null;
+
+  return buildEventRange(draftDate, draftStart, {
+    endDate: draftDate,
+    endTime: draftEnd,
+    allDay: false,
+  });
+}
+
+function findModalConflictEvent(draftRange) {
+  if (!eventsList || !draftRange) return null;
+  const rows = eventsList.querySelectorAll(".event-row");
+
+  for (const row of rows) {
+    const startDate = row.dataset.startDate || "";
+    const startTime = row.dataset.startTime || "";
+    const endDate = row.dataset.endDate || startDate;
+    const endTime = row.dataset.endTime || startTime;
+    const allDay = row.dataset.allDay === "1";
+    if (!startDate || !startTime) continue;
+
+    const existingRange = buildEventRange(startDate, startTime, {
+      endDate,
+      endTime,
+      allDay,
+    });
+    if (!rangesOverlap(draftRange, existingRange)) continue;
+
+    return {
+      title: row.dataset.title || row.querySelector(".event-title")?.textContent?.trim() || "Existing event",
+      startTime,
+      endTime,
+      allDay,
+    };
+  }
+
+  return null;
+}
+
+function validateModalTimeConflict() {
+  if (!modal || modal.getAttribute("aria-hidden") !== "false") {
+    clearModalConflictMessage();
+    return false;
+  }
+
+  const draftRange = getModalDraftRange();
+  if (!draftRange) {
+    clearModalConflictMessage();
+    return false;
+  }
+
+  const conflict = findModalConflictEvent(draftRange);
+  if (!conflict) {
+    clearModalConflictMessage();
+    return false;
+  }
+
+  const timeRangeText = conflict.allDay
+    ? "All day"
+    : `${formatTimeDisplay(conflict.startTime)} - ${formatTimeDisplay(conflict.endTime)}`;
+  setModalConflictMessage(`Time conflict with "${conflict.title}" (${timeRangeText}).`);
+  return true;
+}
+
 function syncEmptyState() {
   if (!eventsList || !emptyState) return;
   const hasEvents = Boolean(eventsList.querySelector(".event-row"));
@@ -426,6 +558,8 @@ function addEventToList(date, time, title, options = {}) {
   const endTime = options.endTime || "";
   const endDate = options.endDate || date;
   const safeTitle = (title || "").trim() || "Untitled event";
+  const normalizedStartTime = normalizeTimeInput(time) || "00:00";
+  const normalizedEndTime = normalizeTimeInput(endTime) || normalizedStartTime;
   if (!shouldDisplayInUpcoming(date, time, { allDay, endTime, endDate })) return;
 
   let group = eventsList.querySelector(`[data-date="${date}"]`);
@@ -456,6 +590,12 @@ function addEventToList(date, time, title, options = {}) {
   const row = document.createElement("li");
   row.className = "event-row";
   row.dataset.sortTime = String(getTimeSortValue(time, allDay));
+  row.dataset.startDate = date;
+  row.dataset.startTime = normalizedStartTime;
+  row.dataset.endDate = endDate;
+  row.dataset.endTime = normalizedEndTime;
+  row.dataset.allDay = allDay ? "1" : "0";
+  row.dataset.title = safeTitle;
 
   const titleEl = document.createElement("div");
   titleEl.className = "event-title";
@@ -525,6 +665,7 @@ function renderMiniCalendar() {
       miniCalendarSelectedIso = isoDate;
       if (eventDate) eventDate.value = formatDateDisplayFromIso(isoDate);
       renderMiniCalendar();
+      validateModalTimeConflict();
     });
 
     miniCalGrid.appendChild(btn);
@@ -545,6 +686,7 @@ function syncMiniCalendarFromInput() {
   if (!normalized) {
     miniCalendarSelectedIso = "";
     renderMiniCalendar();
+    validateModalTimeConflict();
     return;
   }
 
@@ -554,6 +696,7 @@ function syncMiniCalendarFromInput() {
   const [year, month] = normalized.split("-").map(Number);
   miniCalendarView = new Date(year, month - 1, 1);
   renderMiniCalendar();
+  validateModalTimeConflict();
 }
 
 function minutesToDialAngle(minutes) {
@@ -619,6 +762,7 @@ function renderTimeDial() {
   if (timeDialEndRow) timeDialEndRow.hidden = !isDialEndTimePlaced;
   if (timeDialEndText) timeDialEndText.textContent = endText;
   if (timeDialDuration) timeDialDuration.textContent = `Duration ${formatDurationLabel(dialStartMinutes, dialEndMinutes)}`;
+  validateModalTimeConflict();
 }
 
 function setDialFromInputValues() {
@@ -981,6 +1125,7 @@ async function disconnectGoogleCalendar() {
 function openModal() {
   if (!modal) return;
   clearAppMessage();
+  clearModalConflictMessage();
 
   const now = new Date();
   const yyyy = now.getFullYear();
@@ -1015,6 +1160,7 @@ function openModal() {
 function closeModal() {
   if (!modal) return;
   closeWheelPicker();
+  clearModalConflictMessage();
   modal.setAttribute("aria-hidden", "true");
   modal.classList.remove("show");
 }
@@ -1126,6 +1272,10 @@ eventForm?.addEventListener("submit", async (e) => {
   const endMinutes = time24ToMinutes(normalizedEnd);
   if (getClockwiseMinutesBetween(startMinutes, endMinutes) < DIAL_MINUTE_STEP) {
     showAppMessage("End time must be at least 15 minutes after start time.", "error");
+    return;
+  }
+
+  if (validateModalTimeConflict()) {
     return;
   }
 
