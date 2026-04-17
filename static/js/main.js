@@ -833,6 +833,7 @@ function updateActiveDialHandle(clientX, clientY) {
 
 function onDialPointerMove(event) {
   if (!activeDialHandle) return;
+  event.preventDefault();
   updateActiveDialHandle(event.clientX, event.clientY);
 }
 
@@ -1204,6 +1205,11 @@ miniCalNext?.addEventListener("click", () => {
 
 timeDialStartHandle?.addEventListener("pointerdown", (event) => {
   event.preventDefault();
+  if (typeof event.currentTarget?.setPointerCapture === "function") {
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {}
+  }
   activeDialHandle = "start";
   beginStartHandlePlacementCycle();
   updateActiveDialHandle(event.clientX, event.clientY);
@@ -1212,12 +1218,22 @@ timeDialStartHandle?.addEventListener("pointerdown", (event) => {
 timeDialEndHandle?.addEventListener("pointerdown", (event) => {
   if (!isDialEndHandleVisible) return;
   event.preventDefault();
+  if (typeof event.currentTarget?.setPointerCapture === "function") {
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {}
+  }
   activeDialHandle = "end";
   updateActiveDialHandle(event.clientX, event.clientY);
 });
 
 timeDialRing?.addEventListener("pointerdown", (event) => {
   event.preventDefault();
+  if (typeof event.currentTarget?.setPointerCapture === "function") {
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {}
+  }
   if (event.target === timeDialStartHandle || event.target === timeDialEndHandle) return;
   const minutes = getDialMinutesFromPoint(event.clientX, event.clientY);
   activeDialHandle = chooseClosestDialHandle(minutes);
@@ -1227,7 +1243,15 @@ timeDialRing?.addEventListener("pointerdown", (event) => {
   updateActiveDialHandle(event.clientX, event.clientY);
 });
 
-window.addEventListener("pointermove", onDialPointerMove);
+timeDial?.addEventListener(
+  "touchmove",
+  (event) => {
+    event.preventDefault();
+  },
+  { passive: false },
+);
+
+window.addEventListener("pointermove", onDialPointerMove, { passive: false });
 window.addEventListener("pointerup", stopDialDrag);
 window.addEventListener("pointercancel", stopDialDrag);
 window.addEventListener("resize", renderTimeDial);
