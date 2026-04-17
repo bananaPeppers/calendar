@@ -61,6 +61,7 @@ let didMoveStartInCurrentDrag = false;
 let isDialEndTimePlaced = false;
 let wasEndVisibleBeforeStartDrag = false;
 let wasEndPlacedBeforeStartDrag = false;
+let lastDialUpdateTimestamp = 0;
 const DIAL_TOP_MINUTES = 360; // Top of dial = 6:00 AM
 const DIAL_MINUTE_STEP = 15;
 const DIAL_MAX_MINUTES = 1440 - DIAL_MINUTE_STEP;
@@ -76,6 +77,12 @@ const softClasses = [
   "date-bubble--t5",
   "date-bubble--t6",
 ];
+
+let dialTickAudioCtx = null;
+const DIAL_TICK_MIN_INTERVAL_MS = 24;
+const DIAL_TICK_MAX_INTERVAL_MS = 72;
+const DIAL_TICK_MAX_BURST_TICKS = 8;
+const DIAL_TICK_MAX_BURST_WINDOW_MS = 220;
 
 function pad2(num) {
   return String(num).padStart(2, "0");
@@ -230,6 +237,68 @@ function formatDurationLabel(startMinutes, endMinutes) {
   const hours = Math.floor(diff / 60);
   const minutes = diff % 60;
   return `${hours}:${pad2(minutes)}`;
+}
+
+function getDialTickAudioContext() {
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return null;
+  if (!dialTickAudioCtx) {
+    dialTickAudioCtx = new AudioCtx();
+  }
+  return dialTickAudioCtx;
+}
+
+function ensureDialTickAudioReady() {
+  const ctx = getDialTickAudioContext();
+  if (!ctx) return null;
+  if (ctx.state === "suspended") {
+    ctx.resume().catch(() => {});
+  }
+  return ctx;
+}
+
+function playDialTickAtOffset(offsetMs = 0) {
+  const ctx = getDialTickAudioContext();
+  if (!ctx || ctx.state !== "running") return;
+
+  const when = ctx.currentTime + Math.max(0, Number(offsetMs) || 0) / 1000;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+
+  osc.type = "triangle";
+  osc.frequency.setValueAtTime(1550, when);
+
+  gain.gain.setValueAtTime(0.0001, when);
+  gain.gain.exponentialRampToValueAtTime(0.06, when + 0.003);
+  gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.022);
+
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+
+  osc.start(when);
+  osc.stop(when + 0.028);
+}
+
+function playDialTicksForStepChange(stepCount, elapsedMs = 0) {
+  const count = Math.max(0, Math.floor(stepCount));
+  if (!count) return;
+  if (count === 1) {
+    playDialTickAtOffset(0);
+    return;
+  }
+
+  // Faster drags speed up ticks, but cap rate and burst size so sound stays clean.
+  const observedElapsed = Math.max(0, Number(elapsedMs) || 0);
+  const rawInterval = observedElapsed > 0 ? observedElapsed / (count - 1) : DIAL_TICK_MIN_INTERVAL_MS;
+  const intervalMs = clamp(rawInterval, DIAL_TICK_MIN_INTERVAL_MS, DIAL_TICK_MAX_INTERVAL_MS);
+  const burstDurationMs = Math.min((count - 1) * intervalMs, DIAL_TICK_MAX_BURST_WINDOW_MS);
+  const maxTicksBySpacing = Math.max(1, Math.floor(burstDurationMs / DIAL_TICK_MIN_INTERVAL_MS) + 1);
+  const playableCount = Math.min(count, DIAL_TICK_MAX_BURST_TICKS, maxTicksBySpacing);
+
+  for (let i = 0; i < playableCount; i += 1) {
+    const progress = playableCount > 1 ? i / (playableCount - 1) : 0;
+    playDialTickAtOffset(progress * burstDurationMs);
+  }
 }
 
 function showAppMessage(text, type = "info") {
@@ -805,11 +874,12 @@ function chooseClosestDialHandle(targetMinutes) {
   return startDist <= endDist ? "start" : "end";
 }
 
-function updateActiveDialHandle(clientX, clientY) {
+function updateActiveDialHandle(clientX, clientY, eventTimestamp = performance.now()) {
   const nextMinutes = getDialMinutesFromPoint(clientX, clientY);
+  const previousStart = dialStartMinutes;
+  const previousEnd = dialEndMinutes;
   if (activeDialHandle === "start") {
     if (!isDialEndHandleVisible) {
-      const previousStart = dialStartMinutes;
       dialStartMinutes = clamp(nextMinutes, 0, DIAL_MAX_MINUTES);
       if (dialStartMinutes !== previousStart) {
         didMoveStartInCurrentDrag = true;
@@ -828,13 +898,25 @@ function updateActiveDialHandle(clientX, clientY) {
     }
     isDialEndTimePlaced = true;
   }
+
+  const movedMinutes = activeDialHandle === "end"
+    ? Math.abs(dialEndMinutes - previousEnd)
+    : Math.abs(dialStartMinutes - previousStart);
+  const movedSteps = Math.floor(movedMinutes / DIAL_MINUTE_STEP);
+  if (movedSteps > 0) {
+    const elapsed = lastDialUpdateTimestamp > 0
+      ? Math.max(0, eventTimestamp - lastDialUpdateTimestamp)
+      : 0;
+    playDialTicksForStepChange(movedSteps, elapsed);
+  }
+  lastDialUpdateTimestamp = eventTimestamp;
   renderTimeDial();
 }
 
 function onDialPointerMove(event) {
   if (!activeDialHandle) return;
   event.preventDefault();
-  updateActiveDialHandle(event.clientX, event.clientY);
+  updateActiveDialHandle(event.clientX, event.clientY, event.timeStamp);
 }
 
 function stopDialDrag() {
@@ -848,6 +930,7 @@ function stopDialDrag() {
     }
   }
   activeDialHandle = null;
+  lastDialUpdateTimestamp = 0;
   didMoveStartInCurrentDrag = false;
   wasEndVisibleBeforeStartDrag = false;
   wasEndPlacedBeforeStartDrag = false;
@@ -1205,30 +1288,35 @@ miniCalNext?.addEventListener("click", () => {
 
 timeDialStartHandle?.addEventListener("pointerdown", (event) => {
   event.preventDefault();
+  ensureDialTickAudioReady();
   if (typeof event.currentTarget?.setPointerCapture === "function") {
     try {
       event.currentTarget.setPointerCapture(event.pointerId);
     } catch {}
   }
+  lastDialUpdateTimestamp = event.timeStamp || performance.now();
   activeDialHandle = "start";
   beginStartHandlePlacementCycle();
-  updateActiveDialHandle(event.clientX, event.clientY);
+  updateActiveDialHandle(event.clientX, event.clientY, event.timeStamp);
 });
 
 timeDialEndHandle?.addEventListener("pointerdown", (event) => {
   if (!isDialEndHandleVisible) return;
   event.preventDefault();
+  ensureDialTickAudioReady();
   if (typeof event.currentTarget?.setPointerCapture === "function") {
     try {
       event.currentTarget.setPointerCapture(event.pointerId);
     } catch {}
   }
+  lastDialUpdateTimestamp = event.timeStamp || performance.now();
   activeDialHandle = "end";
-  updateActiveDialHandle(event.clientX, event.clientY);
+  updateActiveDialHandle(event.clientX, event.clientY, event.timeStamp);
 });
 
 timeDialRing?.addEventListener("pointerdown", (event) => {
   event.preventDefault();
+  ensureDialTickAudioReady();
   if (typeof event.currentTarget?.setPointerCapture === "function") {
     try {
       event.currentTarget.setPointerCapture(event.pointerId);
@@ -1240,7 +1328,8 @@ timeDialRing?.addEventListener("pointerdown", (event) => {
   if (activeDialHandle === "start") {
     beginStartHandlePlacementCycle();
   }
-  updateActiveDialHandle(event.clientX, event.clientY);
+  lastDialUpdateTimestamp = event.timeStamp || performance.now();
+  updateActiveDialHandle(event.clientX, event.clientY, event.timeStamp);
 });
 
 timeDial?.addEventListener(
