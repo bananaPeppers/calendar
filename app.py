@@ -1,4 +1,5 @@
 import os
+import tempfile
 from datetime import timedelta
 from uuid import uuid4
 
@@ -24,7 +25,22 @@ app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "change-this-dev-secret
 app.config["SESSION_PERMANENT"] = True
 app.permanent_session_lifetime = timedelta(days=3650)
 
-store = GoogleConnectionStore(os.getenv("APP_STATE_DB", "data/app_state.db"))
+
+def _build_store() -> GoogleConnectionStore:
+    configured_db = os.getenv("APP_STATE_DB")
+    if configured_db:
+        return GoogleConnectionStore(configured_db)
+
+    primary_db = "data/app_state.db"
+    try:
+        return GoogleConnectionStore(primary_db)
+    except OSError as exc:
+        fallback_db = os.path.join(tempfile.gettempdir(), "app_state.db")
+        print(f"Failed to open {primary_db}: {exc}. Falling back to {fallback_db}.")
+        return GoogleConnectionStore(fallback_db)
+
+
+store = _build_store()
 
 
 def get_user_key() -> str:
