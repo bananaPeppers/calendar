@@ -614,21 +614,6 @@ async function loadGoogleEvents() {
   }
 }
 
-async function loadSampleEvents() {
-  clearRenderedEvents();
-  try {
-    const response = await fetch("/static/data/sample_events.json");
-    if (!response.ok) throw new Error("No sample events available.");
-    const events = await response.json();
-    events.forEach((event) => {
-      addEventToList(event.date, event.time, event.description, { endTime: "" });
-    });
-  } catch (_err) {
-    // Keep empty state when sample data isn't available.
-  }
-  syncEmptyState();
-}
-
 async function createGoogleCalendarEvent(payload) {
   const response = await fetch("/api/google/events", {
     method: "POST",
@@ -793,7 +778,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (isGoogleConnected) {
       await loadGoogleEvents();
     } else {
-      await loadSampleEvents();
+      clearRenderedEvents();
       if (!status.configured) {
         showAppMessage(
           "Google Calendar OAuth is not configured yet. Set environment variables to enable connection.",
@@ -804,6 +789,6 @@ window.addEventListener("DOMContentLoaded", async () => {
   } catch (err) {
     updateGoogleUi(false);
     showAppMessage(err.message, "error");
-    await loadSampleEvents();
+    clearRenderedEvents();
   }
 });

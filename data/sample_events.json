@@ -1,8 +1,0 @@
-[
-  { "id": 1, "date": "2026-04-16", "time": "15:30", "description": "Event 1" },
-  { "id": 2, "date": "2026-04-16", "time": "15:45", "description": "Event 3" },
-  { "id": 3, "date": "2026-04-18", "time": "10:00", "description": "Event 2" },
-  { "id": 4, "date": "2026-04-21", "time": "15:52", "description": "Event 4" },
-  { "id": 5, "date": "2026-04-21", "time": "15:52", "description": "Event 5" },
-  { "id": 6, "date": "2026-04-22", "time": "09:00", "description": "Morning meeting" }
-]
