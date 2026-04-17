@@ -115,45 +115,23 @@ body.wheel-open {
 .google-connect-btn {
   display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  border-radius: 18px;
-  padding: 6px 8px 6px 16px;
-  font-size: 16px;
-  font-weight: 600;
-  color: #142a52;
-  background: #f7faff;
-  border: 1px solid #c4d2ea;
-  min-height: 52px;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   text-decoration: none;
-  white-space: nowrap;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
+  transition: background 0.15s ease;
 }
 
 .google-connect-btn:hover {
-  background: #eef4ff;
-  border-color: #b3c6e5;
-}
-
-.google-connect-label {
-  line-height: 1;
-}
-
-.google-connect-icon-wrap {
-  width: 36px;
-  height: 36px;
-  border-radius: 11px;
-  background: #e9eff9;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .google-connect-btn img {
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   object-fit: contain;
   flex: 0 0 auto;
 }
@@ -176,9 +154,8 @@ body.wheel-open {
 }
 
 .google-disconnect-btn img {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
+  width: 17px;
+  height: 17px;
   object-fit: contain;
 }
 
@@ -894,21 +871,13 @@ textarea:focus {
   }
 
   .google-connect-btn {
-    padding: 5px 8px 5px 12px;
-    font-size: 14px;
-    min-height: 44px;
-    border-radius: 16px;
-  }
-
-  .google-connect-icon-wrap {
-    width: 30px;
-    height: 30px;
-    border-radius: 10px;
+    width: 36px;
+    height: 36px;
   }
 
   .google-connect-btn img {
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
   }
 
   .google-disconnect-btn {
@@ -917,8 +886,8 @@ textarea:focus {
   }
 
   .google-disconnect-btn img {
-    width: 18px;
-    height: 18px;
+    width: 15px;
+    height: 15px;
   }
 
   .picker-open-btn {
