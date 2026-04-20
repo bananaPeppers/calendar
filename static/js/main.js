@@ -39,6 +39,7 @@ const emptyState = document.getElementById("emptyState");
 const appMessage = document.getElementById("appMessage");
 const googleConnectBtn = document.getElementById("googleConnectBtn");
 const googleDisconnectBtn = document.getElementById("googleDisconnectBtn");
+const refreshEventsBtn = document.getElementById("refreshEventsBtn");
 const miniCalendar = document.getElementById("miniCalendar");
 const miniCalPrev = document.getElementById("miniCalPrev");
 const miniCalNext = document.getElementById("miniCalNext");
@@ -66,6 +67,7 @@ const wheelDoneBtn = document.getElementById("wheelDoneBtn");
 
 let defaultEventCounter = 1;
 let isGoogleConnected = false;
+let isRefreshingEvents = false;
 let selectedEventRow = null;
 let detailSwipePointerId = null;
 let detailSwipeStartY = 0;
@@ -1651,9 +1653,34 @@ async function loadGoogleEvents() {
       });
     });
     syncEmptyState();
+    return true;
   } catch (err) {
     showAppMessage(err.message, "error");
     syncEmptyState();
+    return false;
+  }
+}
+
+async function refreshUpcomingEvents() {
+  if (isRefreshingEvents || !refreshEventsBtn) return;
+  isRefreshingEvents = true;
+  refreshEventsBtn.disabled = true;
+  refreshEventsBtn.classList.add("is-loading");
+
+  try {
+    if (!isGoogleConnected) {
+      showAppMessage("Connect Google Calendar to refresh events.");
+      return;
+    }
+
+    const ok = await loadGoogleEvents();
+    if (ok) {
+      showAppMessage("Events refreshed.", "success");
+    }
+  } finally {
+    isRefreshingEvents = false;
+    refreshEventsBtn.disabled = false;
+    refreshEventsBtn.classList.remove("is-loading");
   }
 }
 
@@ -1899,6 +1926,10 @@ document.addEventListener("keydown", (event) => {
   if (modal?.getAttribute("aria-hidden") === "false") {
     closeModal();
   }
+});
+
+refreshEventsBtn?.addEventListener("click", () => {
+  refreshUpcomingEvents();
 });
 
 eventForm?.addEventListener("submit", async (e) => {

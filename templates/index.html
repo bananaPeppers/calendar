@@ -57,7 +57,33 @@
 
     <main class="main-content">
       <div class="container">
-        <h2 class="section-label">Upcoming events</h2>
+        <div class="section-heading-row">
+          <h2 class="section-label">Upcoming events</h2>
+          <button
+            id="refreshEventsBtn"
+            type="button"
+            class="refresh-events-btn"
+            aria-label="Refresh events"
+            title="Refresh events"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <path
+                d="M20 4v5h-5M4 20v-5h5M6.9 9a7 7 0 0111.6-2.1L20 9M4 15l1.5 2.1A7 7 0 0017.1 15"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
         <p
           id="appMessage"
           class="app-message"

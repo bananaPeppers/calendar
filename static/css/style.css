@@ -164,9 +164,56 @@ body.detail-modal-open {
   object-fit: contain;
 }
 
+.refresh-events-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid #d2dbe8;
+  background: #f4f7fb;
+  color: #3b4f6b;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.refresh-events-btn:hover {
+  background: #e8eff8;
+  border-color: #c2cfdf;
+}
+
+.refresh-events-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.refresh-events-btn.is-loading svg {
+  animation: spin-refresh 0.8s linear infinite;
+}
+
+@keyframes spin-refresh {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Main */
 .main-content {
   padding: 24px 0 40px;
+}
+
+.section-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 14px;
 }
 
 .section-label {
@@ -175,7 +222,7 @@ body.detail-modal-open {
   color: #9ca3af;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  margin: 0 0 14px;
+  margin: 0;
 }
 
 .app-message {
@@ -1112,6 +1159,12 @@ textarea:focus {
   .google-disconnect-btn img {
     width: 15px;
     height: 15px;
+  }
+
+  .refresh-events-btn {
+    display: inline-flex;
+    width: 32px;
+    height: 32px;
   }
 
   .picker-open-btn {

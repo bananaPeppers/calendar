@@ -7,6 +7,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 GOOGLE_SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
@@ -332,5 +333,11 @@ def delete_google_event(
             calendarId=target_calendar_id,
             eventId=normalized_event_id,
         ).execute()
+    except HttpError as exc:
+        status = getattr(getattr(exc, "resp", None), "status", None)
+        # Deleting an already-deleted/missing event should be treated as success.
+        if status in (404, 410):
+            return
+        raise GoogleIntegrationError(f"Unable to delete event: {exc}") from exc
     except Exception as exc:
         raise GoogleIntegrationError(f"Unable to delete event: {exc}") from exc
