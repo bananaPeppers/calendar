@@ -709,8 +709,6 @@ function addEventToList(date, time, title, options = {}) {
   const safeTitle = (title || "").trim() || "Untitled event";
   const normalizedStartTime = normalizeTimeInput(time) || "00:00";
   const normalizedEndTime = normalizeTimeInput(endTime) || normalizedStartTime;
-  if (!shouldDisplayInUpcoming(date, time, { allDay, endTime, endDate }))
-    return;
 
   let group = eventsList.querySelector(`[data-date="${date}"]`);
   if (!group) {

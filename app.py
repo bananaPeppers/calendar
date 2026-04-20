@@ -180,6 +180,18 @@ def google_events():
     if not state.get("connected") or not state.get("credentials"):
         return jsonify({"ok": False, "connected": False, "error": "Google Calendar is not connected."}), 401
     display_time_zone = (request.args.get("time_zone") or "").strip() or None
+    max_results_value = (request.args.get("max_results") or "").strip()
+    lookback_value = (request.args.get("lookback_minutes") or "").strip()
+
+    max_results = None
+    lookback_minutes = None
+    try:
+        if max_results_value:
+            max_results = max(1, min(int(max_results_value), 5000))
+        if lookback_value:
+            lookback_minutes = max(0, int(lookback_value))
+    except ValueError:
+        return jsonify({"ok": False, "connected": True, "error": "Invalid numeric query parameter."}), 400
 
     try:
         credentials = dict_to_credentials(state.get("credentials"))
@@ -189,7 +201,12 @@ def google_events():
             connected=True,
             credentials=credentials_to_dict(credentials),
         )
-        events = list_upcoming_events(credentials, display_time_zone=display_time_zone)
+        events = list_upcoming_events(
+            credentials,
+            max_results=max_results,
+            display_time_zone=display_time_zone,
+            lookback_minutes=lookback_minutes,
+        )
         return jsonify({"ok": True, "connected": True, "events": events})
     except GoogleIntegrationError as exc:
         return jsonify({"ok": False, "connected": True, "error": str(exc)}), 400

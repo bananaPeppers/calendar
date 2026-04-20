@@ -182,26 +182,32 @@ def _collect_events_for_calendar(
     service,
     calendar_id: str,
     *,
-    time_min: str,
-    max_results: int,
+    time_min: str | None,
+    max_results: int | None,
 ) -> list[dict[str, Any]]:
     events: list[dict[str, Any]] = []
     page_token = None
 
-    while len(events) < max_results:
-        batch_size = min(250, max_results - len(events))
-        response = (
-            service.events()
-            .list(
-                calendarId=calendar_id,
-                timeMin=time_min,
-                singleEvents=True,
-                orderBy="startTime",
-                maxResults=batch_size,
-                pageToken=page_token,
-            )
-            .execute()
-        )
+    while True:
+        if max_results is None:
+            batch_size = 250
+        else:
+            remaining = max_results - len(events)
+            if remaining <= 0:
+                break
+            batch_size = min(250, remaining)
+
+        params = {
+            "calendarId": calendar_id,
+            "singleEvents": True,
+            "orderBy": "startTime",
+            "maxResults": batch_size,
+            "pageToken": page_token,
+        }
+        if time_min:
+            params["timeMin"] = time_min
+
+        response = service.events().list(**params).execute()
         events.extend(response.get("items", []))
         page_token = response.get("nextPageToken")
         if not page_token:
@@ -222,27 +228,26 @@ def _event_start_sort_key(raw_event: dict[str, Any]) -> datetime:
 def list_upcoming_events(
     credentials: Credentials,
     *,
-    max_results: int = 250,
+    max_results: int | None = None,
     display_time_zone: str | None = None,
-    lookback_minutes: int = 1440,
+    lookback_minutes: int | None = None,
 ) -> list[dict[str, Any]]:
     service = build("calendar", "v3", credentials=credentials, cache_discovery=False)
-    safe_lookback = max(0, lookback_minutes)
-    time_min = (datetime.now(timezone.utc) - timedelta(minutes=safe_lookback)).isoformat()
+    time_min = None
+    if lookback_minutes is not None:
+        safe_lookback = max(0, lookback_minutes)
+        time_min = (datetime.now(timezone.utc) - timedelta(minutes=safe_lookback)).isoformat()
     calendar_ids = _list_readable_calendar_ids(service)
-    remaining = max(1, max_results)
     raw_items: list[dict[str, Any]] = []
     seen_keys: set[tuple[str, str]] = set()
 
     for calendar_id in calendar_ids:
-        if remaining <= 0:
-            break
         try:
             calendar_items = _collect_events_for_calendar(
                 service,
                 calendar_id,
                 time_min=time_min,
-                max_results=remaining,
+                max_results=max_results,
             )
         except Exception:
             continue
@@ -256,11 +261,11 @@ def list_upcoming_events(
                 continue
             seen_keys.add(dedupe_key)
             raw_items.append(item)
-            remaining -= 1
-            if remaining <= 0:
-                break
 
     raw_items.sort(key=_event_start_sort_key)
+    if max_results is not None:
+        safe_max_results = max(1, max_results)
+        raw_items = raw_items[:safe_max_results]
     return [normalize_google_event(item, display_time_zone=display_time_zone) for item in raw_items]
 
 
