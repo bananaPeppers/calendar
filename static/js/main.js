@@ -745,6 +745,20 @@ function buildTimeLabel(date, time, endTime, allDay = false) {
   return `${startText} - ${endText}`;
 }
 
+function hasRenderedEventByGoogleId(eventId) {
+  if (!eventsList || !eventId) return false;
+  const normalizedId = String(eventId).trim();
+  if (!normalizedId) return false;
+
+  const rows = eventsList.querySelectorAll(".event-row");
+  for (const row of rows) {
+    if ((row.dataset.eventId || "").trim() === normalizedId) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function formatLongDateFromIso(isoDate) {
   const parsed = parseIsoDateTime(isoDate, "00:00");
   if (!parsed) return isoDate || "";
@@ -1058,9 +1072,12 @@ function addEventToList(date, time, title, options = {}) {
   if (!shouldDisplayInUpcoming(date, time, { allDay, endDate, endTime })) {
     return;
   }
+  const eventId = (options.eventId || "").trim();
+  if (eventId && hasRenderedEventByGoogleId(eventId)) {
+    return;
+  }
   const safeTitle = (title || "").trim() || "Untitled event";
   const description = (options.description || "").trim();
-  const eventId = (options.eventId || "").trim();
   const calendarId = (options.calendarId || "").trim() || "primary";
   const source = (options.source || (eventId ? "google" : "local")).trim();
   const normalizedStartTime = normalizeTimeInput(time) || "00:00";
@@ -1700,13 +1717,31 @@ async function loadGoogleEvents() {
     }
 
     const events = data.events || [];
+    const seenEventIds = new Set();
+    const seenSemanticKeys = new Set();
     events.forEach((event) => {
+      const eventId = String(event.id || "").trim();
+      const semanticKey = [
+        String(event.date || "").trim(),
+        String(event.time || "").trim(),
+        String(event.end_date || "").trim(),
+        String(event.end_time || "").trim(),
+        String(event.title || "")
+          .trim()
+          .toLowerCase(),
+        event.all_day ? "1" : "0",
+      ].join("|");
+      if (eventId && seenEventIds.has(eventId)) return;
+      if (seenSemanticKeys.has(semanticKey)) return;
+      if (eventId) seenEventIds.add(eventId);
+      seenSemanticKeys.add(semanticKey);
+
       addEventToList(event.date, event.time, event.title, {
         endTime: event.end_time,
         endDate: event.end_date,
         allDay: event.all_day,
         description: event.description,
-        eventId: event.id,
+        eventId,
         calendarId: event.calendar_id,
         source: "google",
       });
