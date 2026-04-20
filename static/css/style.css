@@ -39,6 +39,11 @@ body.wheel-open {
   overflow: hidden;
 }
 
+body.detail-modal-open {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 /* Header */
 .top-header {
   background: linear-gradient(135deg, #0f1f3d 0%, #1a3a6b 100%);

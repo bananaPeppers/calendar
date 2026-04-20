@@ -27,6 +27,18 @@ Open http://127.0.0.1:5000/ in your browser.
 - `GOOGLE_REDIRECT_URI` (example: `http://127.0.0.1:5000/google/callback`)
 - Optional: `APP_STATE_DB` (default: `data/app_state.db`)
 
+## Railway deploy persistence (important)
+
+To keep Google connected across Railway redeploys:
+
+1. Add a Railway Volume and mount it at `/data`.
+2. Set `APP_STATE_DB=/data/app_state.db`.
+3. Set a fixed `FLASK_SECRET_KEY` (do not rotate it on each deploy).
+
+Notes:
+- The app now also keeps a long-lived `calendar_user_key` cookie so user identity can survive Flask session resets.
+- Without a persistent volume, SQLite state is ephemeral and Google credentials will be lost on redeploy.
+
 ## Google Cloud setup
 
 1. Create or select a Google Cloud project.

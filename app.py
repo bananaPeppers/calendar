@@ -5,7 +5,7 @@ import urllib.request
 from datetime import timedelta
 from uuid import uuid4
 
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, g, jsonify, redirect, render_template, request, session, url_for
 from dotenv import load_dotenv
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -30,11 +30,32 @@ app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "change-this-dev-secret
 app.config["SESSION_PERMANENT"] = True
 app.permanent_session_lifetime = timedelta(days=3650)
 
+USER_KEY_COOKIE_NAME = os.getenv("APP_USER_KEY_COOKIE", "calendar_user_key")
+USER_KEY_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365 * 10
+
+
+def _looks_like_uuid_hex(value: str | None) -> bool:
+    raw = (value or "").strip().lower()
+    if len(raw) != 32:
+        return False
+    return all(ch in "0123456789abcdef" for ch in raw)
+
 
 def _build_store() -> GoogleConnectionStore:
     configured_db = os.getenv("APP_STATE_DB")
     if configured_db:
         return GoogleConnectionStore(configured_db)
+
+    running_on_railway = bool(
+        os.getenv("RAILWAY_PROJECT_ID")
+        or os.getenv("RAILWAY_ENVIRONMENT_ID")
+        or os.getenv("RAILWAY_SERVICE_ID")
+    )
+    if running_on_railway or os.path.isdir("/data"):
+        try:
+            return GoogleConnectionStore("/data/app_state.db")
+        except Exception as exc:
+            app.logger.warning("Unable to use Railway persistent DB path /data/app_state.db: %s", exc)
 
     primary_db = "data/app_state.db"
     try:
@@ -49,10 +70,46 @@ store = _build_store()
 
 
 def get_user_key() -> str:
-    if "user_key" not in session:
-        session["user_key"] = uuid4().hex
+    user_key = session.get("user_key")
+    if not _looks_like_uuid_hex(user_key):
+        user_key = uuid4().hex
+        session["user_key"] = user_key
     session.permanent = True
-    return session["user_key"]
+    return user_key
+
+
+@app.before_request
+def hydrate_user_key_from_cookie():
+    session_key = session.get("user_key")
+    cookie_key = request.cookies.get(USER_KEY_COOKIE_NAME, "")
+
+    resolved_user_key = ""
+    if _looks_like_uuid_hex(session_key):
+        resolved_user_key = session_key
+    elif _looks_like_uuid_hex(cookie_key):
+        resolved_user_key = cookie_key
+    else:
+        resolved_user_key = uuid4().hex
+
+    session["user_key"] = resolved_user_key
+    session.permanent = True
+    g.user_key_cookie_value = resolved_user_key
+    g.should_set_user_key_cookie = cookie_key != resolved_user_key
+
+
+@app.after_request
+def persist_user_key_cookie(response):
+    cookie_value = getattr(g, "user_key_cookie_value", "")
+    if cookie_value and getattr(g, "should_set_user_key_cookie", False):
+        response.set_cookie(
+            USER_KEY_COOKIE_NAME,
+            cookie_value,
+            max_age=USER_KEY_COOKIE_MAX_AGE_SECONDS,
+            httponly=True,
+            secure=request.is_secure,
+            samesite="Lax",
+        )
+    return response
 
 
 def get_user_google_state() -> dict:

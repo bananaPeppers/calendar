@@ -830,6 +830,7 @@ function closeEventDetailModal() {
   setDetailDeleteStatus("");
   setDetailDeleteButtonBusy(false);
   resetDetailSwipeState();
+  document.body.classList.remove("detail-modal-open");
   eventDetailModal.setAttribute("aria-hidden", "true");
   eventDetailModal.classList.remove("show");
 }
@@ -868,6 +869,7 @@ function openEventDetailModalForRow(row) {
     eventDetailDescription.textContent = description;
   }
 
+  document.body.classList.add("detail-modal-open");
   eventDetailModal.setAttribute("aria-hidden", "false");
   eventDetailModal.classList.add("show");
 }
@@ -932,6 +934,9 @@ async function deleteSelectedEventFromDetailModal() {
 function handleDetailSwipeStart(event) {
   if (!eventDetailPanel || !selectedEventRow || detailSwipeDeleteInFlight) return;
   if (event.pointerType === "mouse") return;
+  if (event.cancelable) {
+    event.preventDefault();
+  }
 
   detailSwipePointerId = event.pointerId;
   detailSwipeStartY = event.clientY;
@@ -1732,13 +1737,22 @@ eventDetailModal?.addEventListener("click", (event) => {
 });
 
 eventDetailPanel?.addEventListener("pointerdown", handleDetailSwipeStart, {
-  passive: true,
+  passive: false,
 });
 eventDetailPanel?.addEventListener("pointermove", handleDetailSwipeMove, {
   passive: false,
 });
 eventDetailPanel?.addEventListener("pointerup", handleDetailSwipeEnd);
 eventDetailPanel?.addEventListener("pointercancel", handleDetailSwipeEnd);
+eventDetailModal?.addEventListener(
+  "touchmove",
+  (event) => {
+    if (eventDetailModal?.getAttribute("aria-hidden") !== "false") return;
+    if (!event.cancelable) return;
+    event.preventDefault();
+  },
+  { passive: false },
+);
 
 saveModalBtn?.addEventListener("click", () => {
   if (!eventForm) return;
