@@ -338,6 +338,9 @@ def delete_google_event(
         # Deleting an already-deleted/missing event should be treated as success.
         if status in (404, 410):
             return
+        # Events from external/read-only sources can return Forbidden on delete.
+        if status == 403:
+            raise GoogleIntegrationError("Unable to delete this event.") from exc
         raise GoogleIntegrationError(f"Unable to delete event: {exc}") from exc
     except Exception as exc:
         raise GoogleIntegrationError(f"Unable to delete event: {exc}") from exc
