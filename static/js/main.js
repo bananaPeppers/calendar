@@ -14,6 +14,20 @@
 const modal = document.getElementById("eventModal");
 const closeModalBtn = document.getElementById("closeModal");
 const saveModalBtn = document.getElementById("saveEventBtn");
+const eventDetailModal = document.getElementById("eventDetailModal");
+const eventDetailPanel = document.getElementById("eventDetailPanel");
+const closeDetailModalBtn = document.getElementById("closeDetailModal");
+const deleteDetailEventBtn = document.getElementById("deleteDetailEventBtn");
+const eventDetailTitle = document.getElementById("eventDetailTitle");
+const eventDetailDate = document.getElementById("eventDetailDate");
+const eventDetailTime = document.getElementById("eventDetailTime");
+const eventDetailDescriptionWrap = document.getElementById(
+  "eventDetailDescriptionWrap",
+);
+const eventDetailDescription = document.getElementById("eventDetailDescription");
+const eventDetailDeleteStatus = document.getElementById(
+  "eventDetailDeleteStatus",
+);
 const addEventBtn = document.getElementById("addEventBtn");
 const eventForm = document.getElementById("eventForm");
 const eventTitle = document.getElementById("eventTitle");
@@ -52,6 +66,12 @@ const wheelDoneBtn = document.getElementById("wheelDoneBtn");
 
 let defaultEventCounter = 1;
 let isGoogleConnected = false;
+let selectedEventRow = null;
+let detailSwipePointerId = null;
+let detailSwipeStartY = 0;
+let detailSwipeLastOffset = 0;
+let detailSwipeDeleteInFlight = false;
+let detailDeleteButtonPending = false;
 let wheelState = null;
 let miniCalendarView = new Date(
   new Date().getFullYear(),
@@ -74,6 +94,9 @@ const DIAL_MAX_MINUTES = 1440 - DIAL_MINUTE_STEP;
 const MINUTES_PER_DAY = 1440;
 const END_OF_DAY_MINUTES = MINUTES_PER_DAY - 1;
 const DIAL_DEFAULT_START_TIME = "06:00";
+const DETAIL_DELETE_SWIPE_THRESHOLD = 110;
+const DETAIL_DELETE_SWIPE_MAX_OFFSET = 180;
+const DETAIL_DELETE_CLICK_DELAY_MS = 500;
 
 const WHEEL_ITEM_HEIGHT = 44;
 const softClasses = [
@@ -554,6 +577,9 @@ function syncEmptyState() {
 
 function clearRenderedEvents() {
   if (!eventsList) return;
+  if (eventDetailModal?.getAttribute("aria-hidden") === "false") {
+    closeEventDetailModal();
+  }
   eventsList.innerHTML = "";
   syncEmptyState();
 }
@@ -704,6 +730,246 @@ function buildTimeLabel(date, time, endTime, allDay = false) {
   return `${startText} - ${endText}`;
 }
 
+function formatLongDateFromIso(isoDate) {
+  const parsed = parseIsoDateTime(isoDate, "00:00");
+  if (!parsed) return isoDate || "";
+  return parsed.toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function getDisplayEndDateForDetail(startDate, endDate, allDay = false) {
+  if (!endDate) return startDate;
+  if (!allDay) return endDate;
+  const exclusiveEnd = parseIsoDateTime(endDate, "00:00");
+  if (!exclusiveEnd) return endDate;
+  exclusiveEnd.setDate(exclusiveEnd.getDate() - 1);
+  const display = toIsoDate(
+    exclusiveEnd.getFullYear(),
+    exclusiveEnd.getMonth() + 1,
+    exclusiveEnd.getDate(),
+  );
+  return getDateSortValue(display) < getDateSortValue(startDate)
+    ? startDate
+    : display;
+}
+
+function getEventDetailDateLabel(startDate, endDate, allDay = false) {
+  const displayEnd = getDisplayEndDateForDetail(startDate, endDate, allDay);
+  if (!displayEnd || displayEnd === startDate) {
+    return formatLongDateFromIso(startDate);
+  }
+  return `${formatLongDateFromIso(startDate)} - ${formatLongDateFromIso(displayEnd)}`;
+}
+
+function getEventDetailTimeLabel(
+  startDate,
+  startTime,
+  endDate,
+  endTime,
+  allDay = false,
+) {
+  if (allDay) return "All day";
+
+  const startText = formatTimeDisplay(startTime) || "";
+  const endText = formatTimeDisplay(endTime) || "";
+  if (!endText) return startText;
+  if (!endDate || endDate === startDate) {
+    return `${startText} - ${endText}`;
+  }
+
+  const startDateShort = formatDateDisplayFromIso(startDate);
+  const endDateShort = formatDateDisplayFromIso(endDate);
+  return `${startText} (${startDateShort}) - ${endText} (${endDateShort})`;
+}
+
+function setDetailDeleteStatus(message = "") {
+  if (!eventDetailDeleteStatus) return;
+  const text = String(message || "").trim();
+  eventDetailDeleteStatus.hidden = !text;
+  eventDetailDeleteStatus.textContent = text;
+}
+
+function setDetailDeleteButtonBusy(isBusy) {
+  if (!deleteDetailEventBtn) return;
+  deleteDetailEventBtn.disabled = Boolean(isBusy);
+}
+
+function waitMs(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+function playDetailDeleteButtonClickMotion() {
+  if (!deleteDetailEventBtn) return;
+  deleteDetailEventBtn.classList.remove("is-clicked");
+  // Restart animation on repeated clicks.
+  deleteDetailEventBtn.offsetWidth;
+  deleteDetailEventBtn.classList.add("is-clicked");
+}
+
+function resetDetailSwipeState() {
+  detailSwipePointerId = null;
+  detailSwipeStartY = 0;
+  detailSwipeLastOffset = 0;
+  if (!eventDetailPanel) return;
+  eventDetailPanel.classList.remove("is-swiping-delete", "is-delete-threshold");
+  eventDetailPanel.style.transform = "";
+  eventDetailPanel.style.opacity = "";
+}
+
+function closeEventDetailModal() {
+  if (!eventDetailModal) return;
+  selectedEventRow = null;
+  detailSwipeDeleteInFlight = false;
+  detailDeleteButtonPending = false;
+  setDetailDeleteStatus("");
+  setDetailDeleteButtonBusy(false);
+  resetDetailSwipeState();
+  eventDetailModal.setAttribute("aria-hidden", "true");
+  eventDetailModal.classList.remove("show");
+}
+
+function openEventDetailModalForRow(row) {
+  if (!eventDetailModal || !row) return;
+  const startDate = row.dataset.startDate || "";
+  const startTime = row.dataset.startTime || "";
+  const endDate = row.dataset.endDate || startDate;
+  const endTime = row.dataset.endTime || startTime;
+  const title = row.dataset.title || "Untitled event";
+  const description = (row.dataset.description || "").trim();
+  const allDay = row.dataset.allDay === "1";
+
+  selectedEventRow = row;
+  detailDeleteButtonPending = false;
+  setDetailDeleteStatus("");
+  setDetailDeleteButtonBusy(false);
+  resetDetailSwipeState();
+
+  if (eventDetailTitle) eventDetailTitle.textContent = title;
+  if (eventDetailDate) {
+    eventDetailDate.textContent = getEventDetailDateLabel(startDate, endDate, allDay);
+  }
+  if (eventDetailTime) {
+    eventDetailTime.textContent = getEventDetailTimeLabel(
+      startDate,
+      startTime,
+      endDate,
+      endTime,
+      allDay,
+    );
+  }
+  if (eventDetailDescriptionWrap && eventDetailDescription) {
+    eventDetailDescriptionWrap.hidden = !description;
+    eventDetailDescription.textContent = description;
+  }
+
+  eventDetailModal.setAttribute("aria-hidden", "false");
+  eventDetailModal.classList.add("show");
+}
+
+function removeEventRow(row) {
+  if (!row) return;
+  const groupEvents = row.closest(".group-events");
+  const group = row.closest(".date-group");
+  row.remove();
+  if (groupEvents && !groupEvents.querySelector(".event-row")) {
+    group?.remove();
+  }
+  syncEmptyState();
+}
+
+async function deleteGoogleCalendarEvent(eventId, calendarId = "primary") {
+  const normalizedId = (eventId || "").trim();
+  if (!normalizedId) {
+    throw new Error("Unable to delete this event because its ID is missing.");
+  }
+  const params = new URLSearchParams({ calendar_id: calendarId || "primary" });
+  const response = await fetch(
+    `/api/google/events/${encodeURIComponent(normalizedId)}?${params.toString()}`,
+    { method: "DELETE" },
+  );
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || "Unable to delete Google Calendar event.");
+  }
+}
+
+async function deleteSelectedEventFromDetailModal() {
+  if (!selectedEventRow || detailSwipeDeleteInFlight) return;
+  const row = selectedEventRow;
+  detailSwipeDeleteInFlight = true;
+  setDetailDeleteButtonBusy(true);
+  setDetailDeleteStatus("Deleting event...");
+
+  try {
+    const source = row.dataset.source || "local";
+    if (source === "google") {
+      await deleteGoogleCalendarEvent(
+        row.dataset.eventId || "",
+        row.dataset.calendarId || "primary",
+      );
+    }
+
+    removeEventRow(row);
+    closeEventDetailModal();
+    showAppMessage("Event deleted.", "success");
+  } catch (err) {
+    const message = err?.message || "Unable to delete this event.";
+    setDetailDeleteStatus(message);
+    showAppMessage(message, "error");
+    resetDetailSwipeState();
+    setDetailDeleteButtonBusy(false);
+  } finally {
+    detailSwipeDeleteInFlight = false;
+  }
+}
+
+function handleDetailSwipeStart(event) {
+  if (!eventDetailPanel || !selectedEventRow || detailSwipeDeleteInFlight) return;
+  if (event.pointerType === "mouse") return;
+
+  detailSwipePointerId = event.pointerId;
+  detailSwipeStartY = event.clientY;
+  detailSwipeLastOffset = 0;
+  eventDetailPanel.classList.add("is-swiping-delete");
+  try {
+    eventDetailPanel.setPointerCapture(event.pointerId);
+  } catch {}
+}
+
+function handleDetailSwipeMove(event) {
+  if (!eventDetailPanel) return;
+  if (detailSwipePointerId !== event.pointerId) return;
+  if (event.pointerType !== "mouse" && event.cancelable) {
+    event.preventDefault();
+  }
+
+  const delta = Math.max(0, event.clientY - detailSwipeStartY);
+  const offset = clamp(delta, 0, DETAIL_DELETE_SWIPE_MAX_OFFSET);
+  detailSwipeLastOffset = offset;
+
+  eventDetailPanel.style.transform = `translateY(${offset}px)`;
+  eventDetailPanel.style.opacity = String(1 - (offset / DETAIL_DELETE_SWIPE_MAX_OFFSET) * 0.35);
+  eventDetailPanel.classList.toggle(
+    "is-delete-threshold",
+    offset >= DETAIL_DELETE_SWIPE_THRESHOLD,
+  );
+}
+
+function handleDetailSwipeEnd(event) {
+  if (detailSwipePointerId !== event.pointerId) return;
+  if (detailSwipeLastOffset >= DETAIL_DELETE_SWIPE_THRESHOLD) {
+    deleteSelectedEventFromDetailModal();
+    return;
+  }
+  resetDetailSwipeState();
+}
+
 function addEventToList(date, time, title, options = {}) {
   if (!eventsList || !date) return;
 
@@ -714,6 +980,10 @@ function addEventToList(date, time, title, options = {}) {
     return;
   }
   const safeTitle = (title || "").trim() || "Untitled event";
+  const description = (options.description || "").trim();
+  const eventId = (options.eventId || "").trim();
+  const calendarId = (options.calendarId || "").trim() || "primary";
+  const source = (options.source || (eventId ? "google" : "local")).trim();
   const normalizedStartTime = normalizeTimeInput(time) || "00:00";
   const normalizedEndTime = normalizeTimeInput(endTime) || normalizedStartTime;
 
@@ -751,6 +1021,13 @@ function addEventToList(date, time, title, options = {}) {
   row.dataset.endTime = normalizedEndTime;
   row.dataset.allDay = allDay ? "1" : "0";
   row.dataset.title = safeTitle;
+  row.dataset.description = description;
+  row.dataset.eventId = eventId;
+  row.dataset.calendarId = calendarId;
+  row.dataset.source = source;
+  row.tabIndex = 0;
+  row.setAttribute("role", "button");
+  row.setAttribute("aria-label", `Open details for ${safeTitle}`);
 
   const titleEl = document.createElement("div");
   titleEl.className = "event-title";
@@ -762,6 +1039,14 @@ function addEventToList(date, time, title, options = {}) {
 
   row.appendChild(titleEl);
   row.appendChild(timeEl);
+  row.addEventListener("click", () => {
+    openEventDetailModalForRow(row);
+  });
+  row.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    openEventDetailModalForRow(row);
+  });
   insertEventInTimeOrder(groupEventsEl, row, time, allDay);
   syncEmptyState();
 }
@@ -1341,6 +1626,10 @@ async function loadGoogleEvents() {
         endTime: event.end_time,
         endDate: event.end_date,
         allDay: event.all_day,
+        description: event.description,
+        eventId: event.id,
+        calendarId: event.calendar_id,
+        source: "google",
       });
     });
     syncEmptyState();
@@ -1417,6 +1706,39 @@ window.closeModal = closeModal;
 
 addEventBtn?.addEventListener("click", openModal);
 closeModalBtn?.addEventListener("click", closeModal);
+closeDetailModalBtn?.addEventListener("click", closeEventDetailModal);
+deleteDetailEventBtn?.addEventListener("click", () => {
+  if (!selectedEventRow || detailSwipeDeleteInFlight || detailDeleteButtonPending)
+    return;
+  detailDeleteButtonPending = true;
+  setDetailDeleteButtonBusy(true);
+  playDetailDeleteButtonClickMotion();
+  waitMs(DETAIL_DELETE_CLICK_DELAY_MS).then(() => {
+    if (!selectedEventRow) {
+      detailDeleteButtonPending = false;
+      setDetailDeleteButtonBusy(false);
+      return;
+    }
+    deleteSelectedEventFromDetailModal().finally(() => {
+      detailDeleteButtonPending = false;
+    });
+  });
+});
+
+eventDetailModal?.addEventListener("click", (event) => {
+  if (event.target === eventDetailModal) {
+    closeEventDetailModal();
+  }
+});
+
+eventDetailPanel?.addEventListener("pointerdown", handleDetailSwipeStart, {
+  passive: true,
+});
+eventDetailPanel?.addEventListener("pointermove", handleDetailSwipeMove, {
+  passive: false,
+});
+eventDetailPanel?.addEventListener("pointerup", handleDetailSwipeEnd);
+eventDetailPanel?.addEventListener("pointercancel", handleDetailSwipeEnd);
 
 saveModalBtn?.addEventListener("click", () => {
   if (!eventForm) return;
@@ -1538,8 +1860,17 @@ googleDisconnectBtn?.addEventListener("click", async () => {
 });
 
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && wheelState) {
+  if (event.key !== "Escape") return;
+  if (wheelState) {
     closeWheelPicker();
+    return;
+  }
+  if (eventDetailModal?.getAttribute("aria-hidden") === "false") {
+    closeEventDetailModal();
+    return;
+  }
+  if (modal?.getAttribute("aria-hidden") === "false") {
+    closeModal();
   }
 });
 
@@ -1593,6 +1924,10 @@ eventForm?.addEventListener("submit", async (e) => {
             endTime: createdEvent.end_time,
             endDate: createdEvent.end_date,
             allDay: createdEvent.all_day,
+            description: createdEvent.description,
+            eventId: createdEvent.id,
+            calendarId: createdEvent.calendar_id,
+            source: "google",
           },
         );
       }
@@ -1600,6 +1935,7 @@ eventForm?.addEventListener("submit", async (e) => {
       addEventToList(normalizedDate, normalizedStart, title, {
         endTime: normalizedEnd,
         allDay: false,
+        source: "local",
       });
     }
 

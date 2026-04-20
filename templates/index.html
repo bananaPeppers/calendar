@@ -224,6 +224,61 @@
       </div>
     </div>
 
+    <div id="eventDetailModal" class="modal" aria-hidden="true">
+      <div
+        id="eventDetailPanel"
+        class="modal-panel detail-modal-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Event details"
+      >
+        <header class="modal-header detail-modal-header">
+          <h3 id="eventDetailTitle" class="detail-modal-title">Event details</h3>
+          <div class="detail-modal-actions">
+            <button
+              id="deleteDetailEventBtn"
+              class="detail-delete-btn"
+              type="button"
+              aria-label="Delete event"
+              title="Delete event"
+            >
+              <img src="/static/images/trash.svg" alt="" aria-hidden="true" />
+            </button>
+            <button
+              id="closeDetailModal"
+              class="modal-close"
+              type="button"
+              aria-label="Close event details"
+            >
+              &#10005;
+            </button>
+          </div>
+        </header>
+        <div class="modal-body detail-modal-body">
+          <div class="detail-line">
+            <span class="detail-label">Date</span>
+            <p id="eventDetailDate" class="detail-value"></p>
+          </div>
+          <div class="detail-line">
+            <span class="detail-label">Time</span>
+            <p id="eventDetailTime" class="detail-value"></p>
+          </div>
+          <div id="eventDetailDescriptionWrap" class="detail-line" hidden>
+            <span class="detail-label">Description</span>
+            <p id="eventDetailDescription" class="detail-value detail-description"></p>
+          </div>
+          <p
+            id="eventDetailDeleteStatus"
+            class="detail-delete-status"
+            role="status"
+            aria-live="polite"
+            hidden
+          ></p>
+          <p class="detail-swipe-hint">Swipe down to delete this event.</p>
+        </div>
+      </div>
+    </div>
+
     <div id="wheelPicker" class="wheel-picker" hidden aria-hidden="true">
       <div id="wheelBackdrop" class="wheel-backdrop"></div>
       <div

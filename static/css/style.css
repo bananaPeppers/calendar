@@ -317,6 +317,9 @@ body.wheel-open {
 .event-row {
   padding: 13px 0;
   border-bottom: 1px solid rgba(15, 23, 42, 0.05);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.14s ease;
 }
 
 .event-row:first-child {
@@ -326,6 +329,15 @@ body.wheel-open {
 .event-row:last-child {
   border-bottom: none;
   padding-bottom: 0;
+}
+
+.event-row:hover {
+  background: rgba(37, 99, 235, 0.05);
+}
+
+.event-row:focus-visible {
+  outline: 2px solid rgba(37, 99, 235, 0.45);
+  outline-offset: 2px;
 }
 
 .event-title {
@@ -429,6 +441,159 @@ body.wheel-open {
   flex: 1;
   overflow: auto;
   background: linear-gradient(180deg, #f4f8fd 0%, #edf3fa 100%);
+}
+
+.detail-modal-panel {
+  max-width: 560px;
+  max-height: 78vh;
+  height: auto;
+  transform: translateY(0);
+  touch-action: pan-y;
+  transition:
+    transform 0.16s ease,
+    opacity 0.16s ease;
+}
+
+.detail-modal-panel.is-swiping-delete {
+  transition: none;
+}
+
+.detail-modal-header {
+  padding: 16px 18px;
+}
+
+.detail-modal-title {
+  margin: 0;
+  font-size: 21px;
+  line-height: 1.25;
+  color: #0f172a;
+}
+
+.detail-modal-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.detail-delete-btn {
+  width: 34px;
+  height: 34px;
+  display: none;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #51627d;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    color 0.14s ease,
+    transform 0.16s ease;
+}
+
+.detail-delete-btn:hover {
+  color: #24364f;
+}
+
+.detail-delete-btn:focus-visible {
+  outline: 2px solid rgba(37, 99, 235, 0.35);
+  outline-offset: 2px;
+}
+
+.detail-delete-btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.detail-delete-btn img {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.detail-delete-btn.is-clicked {
+  animation: trash-click-pop 280ms cubic-bezier(0.22, 0.8, 0.28, 1);
+}
+
+@keyframes trash-click-pop {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
+  40% {
+    transform: scale(1.18) rotate(0deg);
+  }
+  72% {
+    transform: scale(1.06) rotate(0deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@media (min-width: 900px) {
+  .detail-delete-btn {
+    display: inline-flex;
+  }
+}
+
+.detail-modal-body {
+  gap: 12px;
+}
+
+.detail-line {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #d6e0ee;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.detail-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.detail-value {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #0f172a;
+  white-space: pre-wrap;
+}
+
+.detail-description {
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: #1e293b;
+}
+
+.detail-delete-status {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #f2d1d1;
+  background: #fff4f4;
+  color: #9f1f1f;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.detail-swipe-hint {
+  margin: 4px 0 0;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.detail-modal-panel.is-delete-threshold .detail-swipe-hint {
+  color: #b91c1c;
 }
 
 .field {
@@ -995,6 +1160,13 @@ textarea:focus {
     max-height: 100%;
     height: 100%;
     transform: none;
+  }
+
+  .detail-modal-panel {
+    max-width: 100%;
+    max-height: min(100%, 640px);
+    height: auto;
+    border-radius: 16px;
   }
 
   .wheel-picker {

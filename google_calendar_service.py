@@ -132,6 +132,7 @@ def normalize_google_event(
 
     return {
         "id": raw_event.get("id"),
+        "calendar_id": raw_event.get("_calendar_id") or "primary",
         "title": raw_event.get("summary") or "Untitled event",
         "description": raw_event.get("description") or "",
         "date": date_value,
@@ -260,7 +261,9 @@ def list_upcoming_events(
             if dedupe_key in seen_keys:
                 continue
             seen_keys.add(dedupe_key)
-            raw_items.append(item)
+            item_with_calendar_id = dict(item)
+            item_with_calendar_id["_calendar_id"] = calendar_id
+            raw_items.append(item_with_calendar_id)
 
     raw_items.sort(key=_event_start_sort_key)
     if max_results is not None:
@@ -308,4 +311,26 @@ def create_google_event(credentials: Credentials, payload: dict[str, Any]) -> di
 
     service = build("calendar", "v3", credentials=credentials, cache_discovery=False)
     created = service.events().insert(calendarId="primary", body=event_body).execute()
+    created["_calendar_id"] = "primary"
     return normalize_google_event(created, display_time_zone=time_zone_name or None)
+
+
+def delete_google_event(
+    credentials: Credentials,
+    *,
+    event_id: str,
+    calendar_id: str | None = None,
+) -> None:
+    normalized_event_id = (event_id or "").strip()
+    if not normalized_event_id:
+        raise GoogleIntegrationError("Event ID is required.")
+
+    target_calendar_id = (calendar_id or "").strip() or "primary"
+    service = build("calendar", "v3", credentials=credentials, cache_discovery=False)
+    try:
+        service.events().delete(
+            calendarId=target_calendar_id,
+            eventId=normalized_event_id,
+        ).execute()
+    except Exception as exc:
+        raise GoogleIntegrationError(f"Unable to delete event: {exc}") from exc

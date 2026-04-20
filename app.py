@@ -14,6 +14,7 @@ from google_calendar_service import (
     build_oauth_flow,
     create_google_event,
     credentials_to_dict,
+    delete_google_event,
     dict_to_credentials,
     ensure_valid_credentials,
     is_google_configured,
@@ -244,6 +245,29 @@ def google_create_event():
         return jsonify({"ok": False, "error": "Invalid date/time format."}), 400
     except Exception as exc:
         return jsonify({"ok": False, "error": f"Failed to create event: {exc}"}), 502
+
+
+@app.delete("/api/google/events/<event_id>")
+def google_delete_event_route(event_id: str):
+    state = get_user_google_state()
+    if not state.get("connected") or not state.get("credentials"):
+        return jsonify({"ok": False, "error": "Google Calendar is not connected."}), 401
+
+    calendar_id = (request.args.get("calendar_id") or "").strip() or "primary"
+    try:
+        credentials = dict_to_credentials(state.get("credentials"))
+        credentials = ensure_valid_credentials(credentials)
+        delete_google_event(credentials, event_id=event_id, calendar_id=calendar_id)
+        store.save_connection_state(
+            get_user_key(),
+            connected=True,
+            credentials=credentials_to_dict(credentials),
+        )
+        return jsonify({"ok": True, "deleted": True})
+    except GoogleIntegrationError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception as exc:
+        return jsonify({"ok": False, "error": f"Failed to delete event: {exc}"}), 502
 
 
 if __name__ == "__main__":
