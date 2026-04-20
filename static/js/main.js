@@ -243,7 +243,8 @@ function getDefaultEndMinutesForStart(startMinutes) {
 
 function isValidSameDayRange(startMinutes, endMinutes) {
   if (endMinutes <= startMinutes) return false;
-  if (startMinutes >= DIAL_MAX_MINUTES) return endMinutes === END_OF_DAY_MINUTES;
+  if (startMinutes >= DIAL_MAX_MINUTES)
+    return endMinutes === END_OF_DAY_MINUTES;
   return endMinutes - startMinutes >= DIAL_MINUTE_STEP;
 }
 
@@ -476,8 +477,7 @@ function getModalDraftRange() {
 
   const startMinutes = time24ToMinutes(draftStart);
   const endMinutes = time24ToMinutes(draftEnd);
-  if (!isValidSameDayRange(startMinutes, endMinutes))
-    return null;
+  if (!isValidSameDayRange(startMinutes, endMinutes)) return null;
 
   return buildEventRange(draftDate, draftStart, {
     endDate: draftDate,
@@ -642,7 +642,11 @@ function shouldDisplayInUpcoming(date, time, options = {}) {
     allDay,
   });
   if (!range) return false;
-  return range.endAt > new Date();
+  const windowStart = new Date();
+  windowStart.setHours(0, 0, 0, 0);
+  const windowEndExclusive = new Date(windowStart);
+  windowEndExclusive.setDate(windowEndExclusive.getDate() + 31);
+  return range.endAt >= windowStart && range.startAt < windowEndExclusive;
 }
 
 function getTimeSortValue(timeString, allDay = false) {
@@ -706,6 +710,9 @@ function addEventToList(date, time, title, options = {}) {
   const allDay = Boolean(options.allDay);
   const endTime = options.endTime || "";
   const endDate = options.endDate || date;
+  if (!shouldDisplayInUpcoming(date, time, { allDay, endDate, endTime })) {
+    return;
+  }
   const safeTitle = (title || "").trim() || "Untitled event";
   const normalizedStartTime = normalizeTimeInput(time) || "00:00";
   const normalizedEndTime = normalizeTimeInput(endTime) || normalizedStartTime;
@@ -861,7 +868,11 @@ function minutesToDialAngle(minutes) {
   return (normalized / MINUTES_PER_DAY) * 360;
 }
 
-function getDialMinutesFromPoint(clientX, clientY, maxMinutes = DIAL_MAX_MINUTES) {
+function getDialMinutesFromPoint(
+  clientX,
+  clientY,
+  maxMinutes = DIAL_MAX_MINUTES,
+) {
   if (!timeDialRing) return 0;
   const rect = timeDialRing.getBoundingClientRect();
   const cx = rect.left + rect.width / 2;
@@ -1008,10 +1019,7 @@ function updateActiveDialHandle(
   } else if (activeDialHandle === "end") {
     let proposedEnd = clamp(nextMinutes, 0, END_OF_DAY_MINUTES);
     // If user keeps dragging forward past day-end, keep end pinned at 11:59 PM.
-    if (
-      previousEnd === END_OF_DAY_MINUTES &&
-      proposedEnd < DIAL_TOP_MINUTES
-    ) {
+    if (previousEnd === END_OF_DAY_MINUTES && proposedEnd < DIAL_TOP_MINUTES) {
       proposedEnd = END_OF_DAY_MINUTES;
     }
     // Fast mobile drags can skip straight across the wrap point in one frame.
