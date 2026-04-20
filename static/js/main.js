@@ -148,6 +148,53 @@ function disablePinchZoom() {
 
 disablePinchZoom();
 
+function disablePullToRefresh() {
+  let touchStartY = 0;
+
+  document.addEventListener(
+    "touchstart",
+    (event) => {
+      if (event.touches.length !== 1) return;
+      touchStartY = event.touches[0].clientY;
+    },
+    { passive: true },
+  );
+
+  document.addEventListener(
+    "touchmove",
+    (event) => {
+      if (event.touches.length !== 1) return;
+      const currentY = event.touches[0].clientY;
+      const deltaY = currentY - touchStartY;
+      if (deltaY <= 0) return;
+
+      let node = event.target instanceof Element ? event.target : null;
+      let scrollableCanScrollUp = false;
+
+      while (node && node !== document.body) {
+        const style = window.getComputedStyle(node);
+        const overflowY = style.overflowY || "";
+        const isScrollable =
+          /(auto|scroll|overlay)/.test(overflowY) &&
+          node.scrollHeight > node.clientHeight;
+        if (isScrollable) {
+          scrollableCanScrollUp = node.scrollTop > 0;
+          break;
+        }
+        node = node.parentElement;
+      }
+
+      if (scrollableCanScrollUp) return;
+      if (window.scrollY <= 0 && event.cancelable) {
+        event.preventDefault();
+      }
+    },
+    { passive: false },
+  );
+}
+
+disablePullToRefresh();
+
 function pad2(num) {
   return String(num).padStart(2, "0");
 }
