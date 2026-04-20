@@ -33,6 +33,7 @@ body {
     Arial,
     sans-serif;
   -webkit-font-smoothing: antialiased;
+  touch-action: pan-x pan-y;
 }
 
 body.wheel-open {

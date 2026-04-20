@@ -123,6 +123,31 @@ const DIAL_TICK_MAX_BURST_WINDOW_MS = 220;
 // Options: "analog_click" | "soft_tock" | "digital_tick"
 const DIAL_TICK_SOUND_PROFILE = "analog_click";
 
+function disablePinchZoom() {
+  const preventIfCancelable = (event) => {
+    if (event.cancelable) event.preventDefault();
+  };
+
+  document.addEventListener("gesturestart", preventIfCancelable, {
+    passive: false,
+  });
+  document.addEventListener("gesturechange", preventIfCancelable, {
+    passive: false,
+  });
+  document.addEventListener("gestureend", preventIfCancelable, {
+    passive: false,
+  });
+  document.addEventListener(
+    "wheel",
+    (event) => {
+      if (event.ctrlKey && event.cancelable) event.preventDefault();
+    },
+    { passive: false },
+  );
+}
+
+disablePinchZoom();
+
 function pad2(num) {
   return String(num).padStart(2, "0");
 }
