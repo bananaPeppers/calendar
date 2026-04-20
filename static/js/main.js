@@ -36,6 +36,7 @@ const eventTime = document.getElementById("eventTime");
 const eventEndTime = document.getElementById("eventEndTime");
 const eventsList = document.getElementById("eventsList");
 const emptyState = document.getElementById("emptyState");
+const emptyStateGoogleHint = document.getElementById("emptyStateGoogleHint");
 const appMessage = document.getElementById("appMessage");
 const googleConnectBtn = document.getElementById("googleConnectBtn");
 const googleDisconnectBtn = document.getElementById("googleDisconnectBtn");
@@ -99,6 +100,8 @@ const DIAL_DEFAULT_START_TIME = "06:00";
 const DETAIL_DELETE_SWIPE_THRESHOLD = 110;
 const DETAIL_DELETE_SWIPE_MAX_OFFSET = 180;
 const DETAIL_DELETE_SWIPE_COMMIT_MS = 180;
+const DETAIL_DELETE_SWIPE_MAX_EDGE_BLUR_PX = 3.2;
+const DETAIL_DELETE_SWIPE_MAX_DANGER_OPACITY = 0.86;
 const DETAIL_DELETE_CLICK_DELAY_MS = 500;
 
 const WHEEL_ITEM_HEIGHT = 44;
@@ -134,6 +137,11 @@ function getBrowserTimeZone() {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function easeOutCubic(value) {
+  const normalized = clamp(Number(value) || 0, 0, 1);
+  return 1 - (1 - normalized) ** 3;
 }
 
 function toIsoDate(year, month, day) {
@@ -576,6 +584,9 @@ function syncEmptyState() {
   if (!eventsList || !emptyState) return;
   const hasEvents = Boolean(eventsList.querySelector(".event-row"));
   emptyState.style.display = hasEvents ? "none" : "flex";
+  if (emptyStateGoogleHint) {
+    emptyStateGoogleHint.hidden = hasEvents || isGoogleConnected;
+  }
 }
 
 function clearRenderedEvents() {
@@ -590,6 +601,7 @@ function clearRenderedEvents() {
 function updateGoogleUi(connected) {
   if (googleConnectBtn) googleConnectBtn.hidden = connected;
   if (googleDisconnectBtn) googleDisconnectBtn.hidden = !connected;
+  syncEmptyState();
 }
 
 function consumeQueryMessages() {
@@ -827,6 +839,11 @@ function resetDetailSwipeState() {
   );
   eventDetailPanel.style.transform = "";
   eventDetailPanel.style.opacity = "";
+  eventDetailPanel.style.boxShadow = "";
+  eventDetailPanel.style.removeProperty("--drag-edge-opacity");
+  eventDetailPanel.style.removeProperty("--drag-edge-blur");
+  eventDetailPanel.style.removeProperty("--drag-danger-opacity");
+  eventDetailPanel.style.removeProperty("--drag-bright-opacity");
 }
 
 function closeEventDetailModal() {
@@ -948,6 +965,8 @@ function handleDetailSwipeStart(event) {
   detailSwipeStartY = event.clientY;
   detailSwipeLastOffset = 0;
   eventDetailPanel.classList.add("is-swiping-delete");
+  eventDetailPanel.style.setProperty("--drag-danger-opacity", "0.06");
+  eventDetailPanel.style.setProperty("--drag-bright-opacity", "0");
   try {
     eventDetailPanel.setPointerCapture(event.pointerId);
   } catch {}
@@ -960,13 +979,45 @@ function handleDetailSwipeMove(event) {
     event.preventDefault();
   }
 
-  const delta = Math.max(0, detailSwipeStartY - event.clientY);
+  const delta = Math.max(0, event.clientY - detailSwipeStartY);
   const offset = clamp(delta, 0, DETAIL_DELETE_SWIPE_MAX_OFFSET);
   const progress = offset / DETAIL_DELETE_SWIPE_MAX_OFFSET;
+  const eased = easeOutCubic(progress);
+  const glideOffset = offset * (0.8 + 0.2 * eased);
+  const scale = 1 - eased * 0.028;
+  const edgeBlurPx = eased * DETAIL_DELETE_SWIPE_MAX_EDGE_BLUR_PX;
+  const edgeOpacity = 0.12 + eased * 0.82;
+  const nearBottomProgress = clamp((progress - 0.74) / 0.26, 0, 1);
+  const dangerOpacity = clamp(
+    0.06 +
+      eased * DETAIL_DELETE_SWIPE_MAX_DANGER_OPACITY +
+      nearBottomProgress * 0.24,
+    0,
+    1,
+  );
+  const brightOpacity = clamp(nearBottomProgress * 0.95, 0, 0.95);
+  const shadowY = 30 + Math.round(eased * 16);
+  const shadowBlur = 70 + Math.round(eased * 26);
+  const shadowAlpha = (0.3 + eased * 0.12).toFixed(3);
   detailSwipeLastOffset = offset;
 
-  eventDetailPanel.style.transform = `translateY(-${offset}px) scale(${1 - progress * 0.03}) rotate(${-progress * 1.8}deg)`;
-  eventDetailPanel.style.opacity = String(1 - progress * 0.35);
+  eventDetailPanel.style.transform = `translate3d(0, ${glideOffset}px, 0) scale(${scale})`;
+  // Keep content readable while dragging; fade mostly at commit stage.
+  eventDetailPanel.style.opacity = String(1 - eased * 0.08);
+  eventDetailPanel.style.boxShadow = `0 ${shadowY}px ${shadowBlur}px rgba(2, 6, 23, ${shadowAlpha})`;
+  eventDetailPanel.style.setProperty(
+    "--drag-edge-opacity",
+    String(clamp(edgeOpacity, 0, 1)),
+  );
+  eventDetailPanel.style.setProperty("--drag-edge-blur", `${edgeBlurPx}px`);
+  eventDetailPanel.style.setProperty(
+    "--drag-danger-opacity",
+    String(dangerOpacity),
+  );
+  eventDetailPanel.style.setProperty(
+    "--drag-bright-opacity",
+    String(brightOpacity),
+  );
   eventDetailPanel.classList.toggle(
     "is-delete-threshold",
     offset >= DETAIL_DELETE_SWIPE_THRESHOLD,
@@ -979,8 +1030,16 @@ function handleDetailSwipeEnd(event) {
     if (eventDetailPanel) {
       eventDetailPanel.classList.remove("is-swiping-delete");
       eventDetailPanel.classList.add("is-delete-committing");
-      eventDetailPanel.style.transform = "translateY(-220px) scale(0.94) rotate(-2.8deg)";
+      eventDetailPanel.style.transform = "translate3d(0, 280px, 0) scale(0.9)";
       eventDetailPanel.style.opacity = "0";
+      eventDetailPanel.style.boxShadow = "0 44px 90px rgba(2, 6, 23, 0.34)";
+      eventDetailPanel.style.setProperty("--drag-edge-opacity", "0.95");
+      eventDetailPanel.style.setProperty(
+        "--drag-edge-blur",
+        `${DETAIL_DELETE_SWIPE_MAX_EDGE_BLUR_PX}px`,
+      );
+      eventDetailPanel.style.setProperty("--drag-danger-opacity", "1");
+      eventDetailPanel.style.setProperty("--drag-bright-opacity", "0.95");
     }
     waitMs(DETAIL_DELETE_SWIPE_COMMIT_MS).then(() => {
       deleteSelectedEventFromDetailModal();
