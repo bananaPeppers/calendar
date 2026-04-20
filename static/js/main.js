@@ -636,39 +636,13 @@ function parseIsoDateTime(dateString, timeString = "00:00") {
 
 function shouldDisplayInUpcoming(date, time, options = {}) {
   const allDay = Boolean(options.allDay);
-  const endDate = options.endDate || date;
-  const endTime = options.endTime || "";
-
-  const startAt = parseIsoDateTime(date, allDay ? "00:00" : time);
-  if (!startAt || Number.isNaN(startAt.getTime())) return false;
-
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-
-  const dayAfterTomorrowStart = new Date(todayStart);
-  dayAfterTomorrowStart.setDate(dayAfterTomorrowStart.getDate() + 2);
-
-  if (startAt < todayStart) return false;
-  if (startAt >= dayAfterTomorrowStart) return false;
-
-  const now = new Date();
-  let endAt = null;
-  if (allDay) {
-    endAt = parseIsoDateTime(endDate || date, "00:00");
-    if (!endAt || endAt <= startAt) {
-      endAt = new Date(startAt);
-      endAt.setDate(endAt.getDate() + 1);
-    }
-  } else {
-    endAt = endTime ? parseIsoDateTime(date, endTime) : null;
-    if (!endAt) {
-      endAt = new Date(startAt);
-      endAt.setMinutes(endAt.getMinutes() + 1);
-    }
-    if (endAt <= startAt) endAt.setDate(endAt.getDate() + 1);
-  }
-
-  return endAt > now;
+  const range = buildEventRange(date, time, {
+    endDate: options.endDate || date,
+    endTime: options.endTime || "",
+    allDay,
+  });
+  if (!range) return false;
+  return range.endAt > new Date();
 }
 
 function getTimeSortValue(timeString, allDay = false) {

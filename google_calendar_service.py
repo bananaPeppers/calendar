@@ -147,16 +147,16 @@ def list_upcoming_events(
     *,
     max_results: int = 250,
     display_time_zone: str | None = None,
-    lookback_minutes: int = 5,
+    lookback_minutes: int = 1440,
 ) -> list[dict[str, Any]]:
     service = build("calendar", "v3", credentials=credentials, cache_discovery=False)
     safe_lookback = max(0, lookback_minutes)
-    now = (datetime.now(timezone.utc) - timedelta(minutes=safe_lookback)).isoformat()
+    time_min = (datetime.now(timezone.utc) - timedelta(minutes=safe_lookback)).isoformat()
     response = (
         service.events()
         .list(
             calendarId="primary",
-            timeMin=now,
+            timeMin=time_min,
             singleEvents=True,
             orderBy="startTime",
             maxResults=max_results,
