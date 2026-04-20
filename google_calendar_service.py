@@ -241,7 +241,8 @@ def list_upcoming_events(
         time_min = (datetime.now(timezone.utc) - timedelta(minutes=safe_lookback)).isoformat()
     calendar_ids = _list_readable_calendar_ids(service)
     raw_items: list[dict[str, Any]] = []
-    seen_keys: set[tuple[str, str]] = set()
+    seen_event_ids: set[str] = set()
+    seen_uid_start_keys: set[tuple[str, str]] = set()
 
     for calendar_id in calendar_ids:
         try:
@@ -255,13 +256,23 @@ def list_upcoming_events(
             continue
 
         for item in calendar_items:
-            item_id = item.get("id")
+            item_id = str(item.get("id") or "").strip()
             if not item_id:
                 continue
-            dedupe_key = (calendar_id, item_id)
-            if dedupe_key in seen_keys:
+            if item_id in seen_event_ids:
                 continue
-            seen_keys.add(dedupe_key)
+
+            start_data = item.get("start", {}) or {}
+            start_marker = str(start_data.get("dateTime") or start_data.get("date") or "").strip()
+            i_cal_uid = str(item.get("iCalUID") or "").strip()
+            uid_start_key = (i_cal_uid, start_marker)
+            if i_cal_uid and start_marker and uid_start_key in seen_uid_start_keys:
+                continue
+
+            seen_event_ids.add(item_id)
+            if i_cal_uid and start_marker:
+                seen_uid_start_keys.add(uid_start_key)
+
             item_with_calendar_id = dict(item)
             item_with_calendar_id["_calendar_id"] = calendar_id
             raw_items.append(item_with_calendar_id)

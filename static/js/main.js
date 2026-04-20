@@ -1790,23 +1790,10 @@ async function loadGoogleEvents() {
 
     const events = data.events || [];
     const seenEventIds = new Set();
-    const seenSemanticKeys = new Set();
     events.forEach((event) => {
       const eventId = String(event.id || "").trim();
-      const semanticKey = [
-        String(event.date || "").trim(),
-        String(event.time || "").trim(),
-        String(event.end_date || "").trim(),
-        String(event.end_time || "").trim(),
-        String(event.title || "")
-          .trim()
-          .toLowerCase(),
-        event.all_day ? "1" : "0",
-      ].join("|");
       if (eventId && seenEventIds.has(eventId)) return;
-      if (seenSemanticKeys.has(semanticKey)) return;
       if (eventId) seenEventIds.add(eventId);
-      seenSemanticKeys.add(semanticKey);
 
       addEventToList(event.date, event.time, event.title, {
         endTime: event.end_time,
