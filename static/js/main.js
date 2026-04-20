@@ -96,6 +96,7 @@ const END_OF_DAY_MINUTES = MINUTES_PER_DAY - 1;
 const DIAL_DEFAULT_START_TIME = "06:00";
 const DETAIL_DELETE_SWIPE_THRESHOLD = 110;
 const DETAIL_DELETE_SWIPE_MAX_OFFSET = 180;
+const DETAIL_DELETE_SWIPE_COMMIT_MS = 180;
 const DETAIL_DELETE_CLICK_DELAY_MS = 500;
 
 const WHEEL_ITEM_HEIGHT = 44;
@@ -817,7 +818,11 @@ function resetDetailSwipeState() {
   detailSwipeStartY = 0;
   detailSwipeLastOffset = 0;
   if (!eventDetailPanel) return;
-  eventDetailPanel.classList.remove("is-swiping-delete", "is-delete-threshold");
+  eventDetailPanel.classList.remove(
+    "is-swiping-delete",
+    "is-delete-threshold",
+    "is-delete-committing",
+  );
   eventDetailPanel.style.transform = "";
   eventDetailPanel.style.opacity = "";
 }
@@ -933,7 +938,6 @@ async function deleteSelectedEventFromDetailModal() {
 
 function handleDetailSwipeStart(event) {
   if (!eventDetailPanel || !selectedEventRow || detailSwipeDeleteInFlight) return;
-  if (event.pointerType === "mouse") return;
   if (event.cancelable) {
     event.preventDefault();
   }
@@ -954,12 +958,13 @@ function handleDetailSwipeMove(event) {
     event.preventDefault();
   }
 
-  const delta = Math.max(0, event.clientY - detailSwipeStartY);
+  const delta = Math.max(0, detailSwipeStartY - event.clientY);
   const offset = clamp(delta, 0, DETAIL_DELETE_SWIPE_MAX_OFFSET);
+  const progress = offset / DETAIL_DELETE_SWIPE_MAX_OFFSET;
   detailSwipeLastOffset = offset;
 
-  eventDetailPanel.style.transform = `translateY(${offset}px)`;
-  eventDetailPanel.style.opacity = String(1 - (offset / DETAIL_DELETE_SWIPE_MAX_OFFSET) * 0.35);
+  eventDetailPanel.style.transform = `translateY(-${offset}px) scale(${1 - progress * 0.03}) rotate(${-progress * 1.8}deg)`;
+  eventDetailPanel.style.opacity = String(1 - progress * 0.35);
   eventDetailPanel.classList.toggle(
     "is-delete-threshold",
     offset >= DETAIL_DELETE_SWIPE_THRESHOLD,
@@ -969,7 +974,15 @@ function handleDetailSwipeMove(event) {
 function handleDetailSwipeEnd(event) {
   if (detailSwipePointerId !== event.pointerId) return;
   if (detailSwipeLastOffset >= DETAIL_DELETE_SWIPE_THRESHOLD) {
-    deleteSelectedEventFromDetailModal();
+    if (eventDetailPanel) {
+      eventDetailPanel.classList.remove("is-swiping-delete");
+      eventDetailPanel.classList.add("is-delete-committing");
+      eventDetailPanel.style.transform = "translateY(-220px) scale(0.94) rotate(-2.8deg)";
+      eventDetailPanel.style.opacity = "0";
+    }
+    waitMs(DETAIL_DELETE_SWIPE_COMMIT_MS).then(() => {
+      deleteSelectedEventFromDetailModal();
+    });
     return;
   }
   resetDetailSwipeState();
